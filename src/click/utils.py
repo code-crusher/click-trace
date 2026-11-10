@@ -265,7 +265,12 @@ def echo(
     :param nl: Print a newline after the message. Enabled by default.
     :param color: Force showing or hiding colors and other styles. By
         default Click will remove color if the output does not look like
-        an interactive terminal.
+        an interactive terminal, unless the ``NO_COLOR`` or ``FORCE_COLOR``
+        environment variables say otherwise.
+
+    .. versionchanged:: 8.6.0
+        The ``NO_COLOR`` and ``FORCE_COLOR`` environment variables are
+        respected when deciding whether to strip color.
 
     .. versionchanged:: 8.5.0
         Colorama is no longer used for color on Windows.

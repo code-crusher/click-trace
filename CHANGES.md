@@ -25,6 +25,12 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- The `NO_COLOR` and `FORCE_COLOR` environment variables are respected when
+  deciding whether to show color in {func}`echo` output. `NO_COLOR` disables
+  color, `FORCE_COLOR` shows color even when the output is not a terminal,
+  and `NO_COLOR` takes precedence over `FORCE_COLOR`, matching the behavior
+  of the Python interpreter. An explicit `color` argument still wins over
+  both. {issue}`3022`
 
 ## Version 8.5.1
 

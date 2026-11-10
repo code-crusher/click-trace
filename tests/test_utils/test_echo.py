@@ -88,6 +88,55 @@ def test_echo_color_flag(monkeypatch, capfd):
     assert out == f"{styled_text}\n"
 
 
+@pytest.mark.parametrize(
+    ("env", "expected"),
+    [
+        ({"FORCE_COLOR": "1"}, "\x1b[31mfoo\x1b[0m"),
+        # Any non-empty value enables or disables color, matching the
+        # Python interpreter's own handling of these variables.
+        ({"FORCE_COLOR": "0"}, "\x1b[31mfoo\x1b[0m"),
+        ({"NO_COLOR": "1"}, "foo"),
+        # NO_COLOR takes precedence over FORCE_COLOR.
+        ({"NO_COLOR": "1", "FORCE_COLOR": "1"}, "foo"),
+    ],
+)
+def test_echo_env_color(monkeypatch, capfd, env, expected):
+    """FORCE_COLOR keeps and NO_COLOR strips color when not a TTY."""
+    monkeypatch.setattr(click._compat, "isatty", lambda x: False)
+
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+
+    click.echo(click.style("foo", fg="red"))
+    out, err = capfd.readouterr()
+    assert out == f"{expected}\n"
+
+
+def test_echo_env_color_overridden_by_explicit_flag(monkeypatch, capfd):
+    """An explicit color flag wins over the environment variables."""
+    monkeypatch.setattr(click._compat, "isatty", lambda x: False)
+    monkeypatch.setenv("FORCE_COLOR", "1")
+
+    click.echo(click.style("foo", fg="red"), color=False)
+    out, err = capfd.readouterr()
+    assert out == "foo\n"
+
+    monkeypatch.setenv("NO_COLOR", "1")
+    click.echo(click.style("foo", fg="red"), color=True)
+    out, err = capfd.readouterr()
+    assert out == "\x1b[31mfoo\x1b[0m\n"
+
+
+def test_echo_env_color_no_tty_check_forced(monkeypatch, capfd):
+    """FORCE_COLOR enables color even when the stream is not a TTY."""
+    monkeypatch.setattr(click._compat, "isatty", lambda x: False)
+    monkeypatch.setenv("FORCE_COLOR", "1")
+
+    click.secho("foo", fg="red")
+    out, err = capfd.readouterr()
+    assert out == "\x1b[31mfoo\x1b[0m\n"
+
+
 @pytest.mark.skipif(WIN, reason="Test too complex to make work windows.")
 def test_echo_writing_to_standard_error(capfd, monkeypatch):
     def emulate_input(text):

@@ -56,6 +56,14 @@ The {func}`echo` function supports ANSI colors and styles. It will
 automatically strip ANSI color codes if the stream is not connected to a
 terminal.
 
+The `NO_COLOR` and `FORCE_COLOR` environment variables override this
+detection, the same way they do for the Python interpreter itself. `NO_COLOR`
+disables color, `FORCE_COLOR` enables it even when the output is not a
+terminal, and `NO_COLOR` takes precedence over `FORCE_COLOR`. Any non-empty
+value counts. This is useful in environments such as CI where output is
+written to a file but can still display color. An explicit `color` argument
+or context setting still takes precedence over both variables.
+
 ```{admonition} Older Windows Support
 :class: note
 

@@ -499,6 +499,22 @@ def _is_jupyter_kernel_output(stream: t.IO[t.Any]) -> bool:
     return stream.__class__.__module__.startswith("ipykernel.")
 
 
+def _env_color() -> bool | None:
+    """Give the color preference from the environment, if any.
+
+    ``NO_COLOR`` disables color, taking precedence over ``FORCE_COLOR``, which
+    enables it even when the output is not a terminal. This matches the
+    behavior of the Python interpreter itself; any non-empty value counts.
+    """
+    if os.environ.get("NO_COLOR"):
+        return False
+
+    if os.environ.get("FORCE_COLOR"):
+        return True
+
+    return None
+
+
 def should_strip_ansi(
     stream: t.IO[t.Any] | None = None, color: bool | None = None
 ) -> bool:
@@ -509,6 +525,11 @@ def should_strip_ansi(
             # ._termui_impl._PagerWriter handles stripping ansi itself,
             # so we don't need to strip it here
             return False
+        env_color = _env_color()
+
+        if env_color is not None:
+            return not env_color
+
         return not isatty(stream) and not _is_jupyter_kernel_output(stream)
     return not color
 
