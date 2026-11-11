@@ -61,6 +61,54 @@ V = t.TypeVar("V")
 _HELP_OPTION_STORAGE_NAME = "_click_default_help"
 
 
+class HelpRecord(t.TypedDict):
+    """A row in a help page section.
+
+    :attr:`spec` is the left column, how the parameter or command is
+    spelled on the command line. :attr:`help` is the right column, its
+    description. Both are already formatted and may be empty.
+
+    .. versionadded:: 8.6.0
+    """
+
+    spec: str
+    help: str
+
+
+class HelpInfo(t.TypedDict):
+    """Structured data describing a command's help page.
+
+    This is the low-level data behind the default help page. It is
+    returned by :meth:`Command.get_help_info`, and can be used to render
+    a help page with a different layout, for example with a terminal
+    formatting library.
+
+    The data is already processed: text is cleaned and the deprecated
+    label is translated. Rendering it does not require any knowledge of
+    Click's internals.
+
+    :attr:`usage` is the usage line, without a trailing newline.
+    :attr:`help` is the long help text, including the deprecated label.
+    :attr:`epilog` is the epilog text. :attr:`options`, :attr:`arguments`,
+    and :attr:`commands` are the rows of the respective sections, in the
+    order they appear on the help page. A section is empty when it should
+    not be shown.
+
+    Row text is not wrapped, since the renderer decides the width of the
+    page. A command's short help is still condensed to one sentence and
+    truncated, like it is on the default page.
+
+    .. versionadded:: 8.6.0
+    """
+
+    usage: str
+    help: str
+    epilog: str
+    options: list[HelpRecord]
+    arguments: list[HelpRecord]
+    commands: list[HelpRecord]
+
+
 def _complete_visible_commands(
     ctx: Context, incomplete: str
 ) -> cabc.Iterator[tuple[str, Command]]:
@@ -867,6 +915,14 @@ class Context:
         """
         return self.command.get_help(self)
 
+    def get_help_info(self) -> HelpInfo:
+        """Helper method to get the structured help data for the current
+        context and command.
+
+        .. versionadded:: 8.6.0
+        """
+        return self.command.get_help_info(self)
+
     def _make_sub_context(self, command: Command) -> Context:
         """Create a new context of the same type as this context, but
         for a new command.
@@ -1265,6 +1321,114 @@ class Command:
         self.format_help(ctx, formatter)
         return formatter.getvalue().rstrip("\n")
 
+    def get_help_info(self, ctx: Context) -> HelpInfo:
+        """Returns the structured data used to render the help page.
+
+        This is the low-level companion of :meth:`get_help`. Where
+        :meth:`get_help` returns a string laid out by Click,
+        ``get_help_info`` returns the same content as data, so a custom
+        renderer can lay it out however it wants. The following methods
+        provide the individual pieces:
+
+        -   :meth:`get_usage` for :attr:`HelpInfo.usage`
+        -   :meth:`get_help_text` for :attr:`HelpInfo.help`
+        -   :meth:`get_help_arguments` for :attr:`HelpInfo.arguments`
+        -   :meth:`get_help_options` for :attr:`HelpInfo.options`
+        -   :meth:`get_help_commands` for :attr:`HelpInfo.commands`
+        -   :meth:`get_help_epilog` for :attr:`HelpInfo.epilog`
+
+        .. versionadded:: 8.6.0
+        """
+        return HelpInfo(
+            usage=self.get_usage(ctx),
+            help=self.get_help_text(ctx),
+            epilog=self.get_help_epilog(ctx),
+            options=self.get_help_options(ctx),
+            arguments=self.get_help_arguments(ctx),
+            commands=self.get_help_commands(ctx),
+        )
+
+    def get_help_text(self, ctx: Context) -> str:
+        """Returns the command's long help text, or an empty string.
+
+        The text is cleaned and truncated at the first form feed, and the
+        deprecated label is appended if the command is deprecated.
+
+        .. versionadded:: 8.6.0
+        """
+        if self.help is not None:
+            # truncate the help text to the first form feed
+            text = inspect.cleandoc(self.help).partition("\f")[0]
+        else:
+            text = ""
+
+        if self.deprecated:
+            label = _format_deprecated_label(self.deprecated)
+            text = f"{text} {label}" if text else label
+
+        return text
+
+    def get_help_options(self, ctx: Context) -> list[HelpRecord]:
+        """Returns the rows of the ``Options`` help section.
+
+        The rows are in the order the parameters were declared. A hidden
+        option has no row. The list is empty when there are no options to
+        show, in which case the section is omitted.
+
+        .. versionadded:: 8.6.0
+        """
+        opts: list[HelpRecord] = []
+
+        for param in self.get_params(ctx):
+            rv = param.get_help_record(ctx)
+
+            if rv is not None and not isinstance(param, Argument):
+                opts.append(HelpRecord(spec=rv[0], help=rv[1]))
+
+        return opts
+
+    def get_help_arguments(self, ctx: Context) -> list[HelpRecord]:
+        """Returns the rows of the ``Positional arguments`` help section.
+
+        An argument with no help gets an empty description, the same way
+        an option with no help does. That keeps the section an exhaustive
+        list of the positional arguments, matching the usage line.
+
+        The list is empty when no argument is documented, in which case
+        the section is omitted.
+
+        .. versionadded:: 8.6.0
+        """
+        args = [param for param in self.get_params(ctx) if isinstance(param, Argument)]
+
+        if not any(arg.help is not None for arg in args):
+            return []
+
+        return [
+            HelpRecord(spec=spec, help=help_)
+            for spec, help_ in (arg.get_help_record(ctx) for arg in args)
+        ]
+
+    def get_help_commands(self, ctx: Context) -> list[HelpRecord]:
+        """Returns the rows of the ``Commands`` help section.
+
+        The base implementation returns an empty list, since a command
+        has no subcommands.
+
+        .. versionadded:: 8.6.0
+        """
+        return []
+
+    def get_help_epilog(self, ctx: Context) -> str:
+        """Returns the command's epilog text, or an empty string.
+
+        .. versionadded:: 8.6.0
+        """
+        if not self.epilog:
+            return ""
+
+        return inspect.cleandoc(self.epilog)
+
     def get_short_help_str(self, limit: int = 45) -> str:
         """Gets short help for the command or makes it by shortening the
         long help string.
@@ -1293,6 +1457,10 @@ class Command:
         -   :meth:`format_arguments`
         -   :meth:`format_options`
         -   :meth:`format_epilog`
+
+        .. versionchanged:: 8.6.0
+            The content written comes from the ``get_help_*`` methods, so
+            overriding one of them also changes the rendered help page.
         """
         self.format_usage(ctx, formatter)
         self.format_help_text(ctx, formatter)
@@ -1302,15 +1470,7 @@ class Command:
 
     def format_help_text(self, ctx: Context, formatter: HelpFormatter) -> None:
         """Writes the help text to the formatter if it exists."""
-        if self.help is not None:
-            # truncate the help text to the first form feed
-            text = inspect.cleandoc(self.help).partition("\f")[0]
-        else:
-            text = ""
-
-        if self.deprecated:
-            label = _format_deprecated_label(self.deprecated)
-            text = f"{text} {label}" if text else label
+        text = self.get_help_text(ctx)
 
         if text:
             formatter.write_paragraph()
@@ -1320,33 +1480,25 @@ class Command:
 
     def format_options(self, ctx: Context, formatter: HelpFormatter) -> None:
         """Writes all the options into the formatter if they exist."""
-        opts = []
-        for param in self.get_params(ctx):
-            rv = param.get_help_record(ctx)
-            if rv is not None and not isinstance(param, Argument):
-                opts.append(rv)
+        opts = self.get_help_options(ctx)
 
         if opts:
             with formatter.section(_("Options")):
-                formatter.write_dl(opts)
+                formatter.write_dl([(o["spec"], o["help"]) for o in opts])
 
     def format_arguments(self, ctx: Context, formatter: HelpFormatter) -> None:
-        """Writes all arguments into the formatter, if at least one is documented.
+        """Writes all arguments into the formatter, if at least one is documented."""
+        args = self.get_help_arguments(ctx)
 
-        An argument with no help gets an empty description, the same way an option
-        with no help does. That keeps the section an exhaustive list of the
-        positional arguments, matching the usage line.
-        """
-        args = [param for param in self.get_params(ctx) if isinstance(param, Argument)]
-
-        if any(arg.help is not None for arg in args):
+        if args:
             with formatter.section(_("Positional arguments")):
-                formatter.write_dl([arg.get_help_record(ctx) for arg in args])
+                formatter.write_dl([(a["spec"], a["help"]) for a in args])
 
     def format_epilog(self, ctx: Context, formatter: HelpFormatter) -> None:
         """Writes the epilog into the formatter if it exists."""
-        if self.epilog:
-            epilog = inspect.cleandoc(self.epilog)
+        epilog = self.get_help_epilog(ctx)
+
+        if epilog:
             formatter.write_paragraph()
 
             with formatter.indentation():
@@ -2000,33 +2152,50 @@ class Group(Command):
         super().format_options(ctx, formatter)
         self.format_commands(ctx, formatter)
 
+    def _iter_help_commands(self, ctx: Context) -> cabc.Iterator[tuple[str, Command]]:
+        """List the subcommands shown in the help page, in order."""
+        for subcommand in self.list_commands(ctx):
+            cmd = self.get_command(ctx, subcommand)
+            # What is this, the tool lied about a command.  Ignore it
+            if cmd is None or cmd.hidden:
+                continue
+
+            yield subcommand, cmd
+
+    def get_help_commands(self, ctx: Context, limit: int = 45) -> list[HelpRecord]:
+        """Returns the rows of the ``Commands`` help section.
+
+        Each row is a subcommand name and its short help, truncated to
+        ``limit`` characters. Hidden subcommands have no row. The list is
+        empty when there are no visible subcommands, in which case the
+        section is omitted.
+
+        :param ctx: Invocation context for the group.
+        :param limit: The maximum length of a short help string.
+
+        .. versionadded:: 8.6.0
+        """
+        return [
+            HelpRecord(spec=subcommand, help=cmd.get_short_help_str(limit))
+            for subcommand, cmd in self._iter_help_commands(ctx)
+        ]
+
     def format_commands(self, ctx: Context, formatter: HelpFormatter) -> None:
         """Extra format methods for multi methods that adds all the commands
         after the options.
         """
-        commands = []
-        for subcommand in self.list_commands(ctx):
-            cmd = self.get_command(ctx, subcommand)
-            # What is this, the tool lied about a command.  Ignore it
-            if cmd is None:
-                continue
-            if cmd.hidden:
-                continue
+        commands = list(self._iter_help_commands(ctx))
 
-            commands.append((subcommand, cmd))
+        if not commands:
+            return
 
         # allow for 3 times the default spacing
-        if len(commands):
-            limit = formatter.width - 6 - max(len(cmd[0]) for cmd in commands)
+        limit = formatter.width - 6 - max(len(name) for name, _ in commands)
+        rows = self.get_help_commands(ctx, limit)
 
-            rows = []
-            for subcommand, cmd in commands:
-                help = cmd.get_short_help_str(limit)
-                rows.append((subcommand, help))
-
-            if rows:
-                with formatter.section(_("Commands")):
-                    formatter.write_dl(rows)
+        if rows:
+            with formatter.section(_("Commands")):
+                formatter.write_dl([(r["spec"], r["help"]) for r in rows])
 
     def parse_args(self, ctx: Context, args: list[str]) -> list[str]:
         if not args and self.no_args_is_help and not ctx.resilient_parsing:

@@ -25,6 +25,12 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- Add {meth}`Command.get_help_info` and {meth}`Context.get_help_info`, which
+  return the content of the help page as structured data instead of a
+  rendered string. This is the low-level API that help renderers such as
+  Rich-based plugins build on, without needing to know Click's internals. The
+  default help page is now rendered from this data through the new
+  `get_help_*` methods, so overriding one of them changes both. {issue}`3089`
 
 ## Version 8.5.1
 

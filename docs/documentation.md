@@ -345,3 +345,57 @@ instead of just `--help`:
 .. click:run::
     invoke(cli, ['-h'])
 ```
+
+## Custom Help Rendering
+
+The text of a help page is customizable, but Click lays it out itself. For
+cases where the layout itself must change, such as rendering help with a
+terminal formatting library, {meth}`Command.get_help_info` returns the content
+of the page as structured data instead of a string:
+
+```python
+import click
+
+
+@click.command(help="Say hello.", epilog="That's all.")
+@click.argument("name", help="Who to greet.")
+@click.option("--count", default=1, help="Number of greetings.")
+def hello(name, count):
+    pass
+
+
+info = hello.get_help_info(click.Context(hello, info_name="hello"))
+```
+
+`info` contains:
+
+```python
+{
+    "usage": "Usage: hello [OPTIONS] NAME",
+    "help": "Say hello.",
+    "epilog": "That's all.",
+    "options": [
+        {"spec": "--count INTEGER", "help": "Number of greetings."},
+        {"spec": "--help", "help": "Show this message and exit."},
+    ],
+    "arguments": [{"spec": "NAME", "help": "Who to greet."}],
+    "commands": [],
+}
+```
+
+The result is a {class}`HelpInfo` dictionary with the usage line, the long help
+text, the epilog, and the rows of the options, arguments, and commands
+sections. Each row is a {class}`HelpRecord` with a `spec` (how the item is
+spelled) and its `help` description. Sections with no rows are empty lists.
+
+The data is already cleaned, translated, and documented, so a renderer does
+not need to know how Click builds it. A row's text is not wrapped, since the
+renderer decides the width. The default help page is built from this same
+data: overriding a `get_help_*` method changes both the data and the rendered
+page.
+
+:::{note}
+This is the low-level interface. Use it when you are writing a help renderer
+or a library that provides one. For the text of individual sections, the
+`format_*` methods are simpler to override.
+:::

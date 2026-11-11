@@ -171,6 +171,20 @@ classes and functions.
    :members:
 ```
 
+## Help Data
+
+These types describe the structured data returned by
+{meth}`Command.get_help_info`. It is the content of the default help page
+without any layout, so it can be rendered by a custom formatter.
+
+```{eval-rst}
+.. autoclass:: HelpInfo
+```
+
+```{eval-rst}
+.. autoclass:: HelpRecord
+```
+
 ## Parameters
 
 ```{eval-rst}
