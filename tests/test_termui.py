@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
@@ -615,6 +616,71 @@ def test_editor_nonexistent_exception():
     with patch("subprocess.Popen", side_effect=OSError("not found")):
         with pytest.raises(click.ClickException, match="not found"):
             Editor(editor="nonexistent").edit_files(["f.txt"])
+
+
+def _win_error(winerror: int) -> OSError:
+    """Build an ``OSError`` carrying a Windows error code on any platform."""
+    e = OSError(winerror, "The parameter is incorrect")
+    e.winerror = winerror  # type: ignore[attr-defined]
+    return e
+
+
+@pytest.mark.parametrize("winerror", [87, 14001])
+def test_editor_retries_transient_windows_error(winerror, monkeypatch):
+    """WinErrors 87 and 14001 are retried; a later attempt succeeds."""
+    monkeypatch.setattr(click._termui_impl, "WIN", True)
+    attempts = []
+    success = MagicMock()
+    success.wait.return_value = 0
+
+    def popen(*args, **kwargs):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise _win_error(winerror)
+
+        return success
+
+    with patch("subprocess.Popen", side_effect=popen):
+        Editor(editor="notepad", env={}).edit_files(["f.txt"])
+
+    assert len(attempts) == 3
+
+
+@pytest.mark.parametrize("winerror", [87, 14001])
+def test_editor_transient_windows_error_persists(winerror, monkeypatch):
+    """All retry attempts failing raises a ClickException with the error."""
+    monkeypatch.setattr(click._termui_impl, "WIN", True)
+    error = _win_error(winerror)
+
+    with patch("subprocess.Popen", side_effect=error) as mock_popen:
+        with pytest.raises(click.ClickException, match="Editing failed"):
+            Editor(editor="notepad", env={}).edit_files(["f.txt"])
+
+    assert mock_popen.call_count == 3
+
+
+@pytest.mark.parametrize("winerror", [87, 14001])
+def test_editor_does_not_retry_off_windows(winerror, monkeypatch):
+    """The same Windows error is not retried away from Windows."""
+    monkeypatch.setattr(click._termui_impl, "WIN", False)
+    error = _win_error(winerror)
+
+    with patch("subprocess.Popen", side_effect=error) as mock_popen:
+        with pytest.raises(click.ClickException, match="Editing failed"):
+            Editor(editor="notepad", env={}).edit_files(["f.txt"])
+
+    assert mock_popen.call_count == 1
+
+
+def test_editor_does_not_retry_other_oserror():
+    """A non-transient OSError is reported on the first attempt."""
+    with patch(
+        "subprocess.Popen", side_effect=OSError(2, "No such file or directory")
+    ) as mock_popen:
+        with pytest.raises(click.ClickException, match="No such file"):
+            Editor(editor="nonexistent").edit_files(["f.txt"])
+
+    assert mock_popen.call_count == 1
 
 
 @pytest.mark.parametrize(

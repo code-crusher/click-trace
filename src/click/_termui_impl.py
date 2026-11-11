@@ -720,14 +720,38 @@ class Editor:
             environ = os.environ.copy()
             environ.update(self.env)
 
+        args = shlex.split(editor) + list(filenames)
+
         try:
             # Split in POSIX mode (the default) for the same reasons as
             # in pager(): strips quotes from tokens and preserves quoted
             # Windows paths.
-            c = subprocess.Popen(
-                args=shlex.split(editor) + list(filenames),
-                env=environ,
-            )
+            c: subprocess.Popen[bytes] | None = None
+            exc: OSError | None = None
+
+            for _attempt in range(3):
+                try:
+                    c = subprocess.Popen(
+                        args=args,
+                        env=environ,
+                    )
+                    break
+                except OSError as e:
+                    # Resolving an app execution alias such as "notepad"
+                    # on Windows 11 intermittently fails inside the OS
+                    # with WinError 87 ("The parameter is incorrect") or
+                    # 14001 ("side-by-side configuration is incorrect").
+                    # The same launch usually succeeds when retried.
+                    if WIN and getattr(e, "winerror", None) in (87, 14001):
+                        exc = e
+                        continue
+
+                    raise
+
+            if c is None:
+                assert exc is not None
+                raise exc
+
             exit_code = c.wait()
             if exit_code != 0:
                 raise ClickException(

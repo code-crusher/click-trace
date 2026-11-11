@@ -2,6 +2,9 @@
 
 Unreleased
 
+- `edit` retries launching the editor on Windows when it fails with WinError
+  87 or 14001, an intermittent failure resolving the `notepad` app execution
+  alias inside Windows itself. {issue}`3840`
 - A parameter name that is not a valid Python identifier, or that is a Python
   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
 - An {class}`Option` name written as a Python identifier is deprecated when it
