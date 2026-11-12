@@ -174,15 +174,33 @@ class TextWrapper(textwrap.TextWrapper):
             self.initial_indent = old_initial_indent
             self.subsequent_indent = old_subsequent_indent
 
-    def indent_only(self, text: str) -> str:
+    def fill_preserving_newlines(self, text: str) -> str:
+        """Wrap each line of ``text`` separately, keeping the line breaks.
+
+        A ``\\b`` block keeps its newlines, but a line can still be longer
+        than the available width, so it is wrapped instead of overflowing.
+        A wrapped line's continuation is indented to match that line's own
+        leading whitespace, so an indented block stays aligned.
+        """
         rv = []
+        initial_indent = self.initial_indent
+        subsequent_indent = self.subsequent_indent
 
-        for idx, line in enumerate(text.splitlines()):
-            indent = self.initial_indent
+        try:
+            for idx, line in enumerate(text.splitlines()):
+                stripped = line.lstrip()
+                leading = line[: len(line) - len(stripped)]
+                line_indent = initial_indent if idx == 0 else subsequent_indent
+                # Keep the source line's own leading whitespace, and align
+                # any continuation of a wrapped line with it.
+                self.initial_indent = line_indent + leading
+                self.subsequent_indent = subsequent_indent + leading
 
-            if idx > 0:
-                indent = self.subsequent_indent
-
-            rv.append(f"{indent}{line}")
+                # Keep blank or whitespace-only lines as empty output lines
+                # rather than dropping them.
+                rv.extend(self.wrap(stripped) or [""])
+        finally:
+            self.initial_indent = initial_indent
+            self.subsequent_indent = subsequent_indent
 
         return "\n".join(rv)

@@ -235,7 +235,7 @@ Click's default wrapping ignores single new lines and rewraps the text based on 
 
 ## Escaping Click's Wrapping
 
-Sometimes Click's wrapping can be a problem, such as when showing code examples where new lines are significant. This behavior can be escaped on a per-paragraph basis by adding a line with only `\b` . The `\b` is removed from the rendered help text.
+Sometimes Click's wrapping can be a problem, such as when showing code examples where new lines are significant. This behavior can be escaped on a per-paragraph basis by adding a line with only `\b` . The `\b` is removed from the rendered help text, and the line breaks in that paragraph are kept. A line that is still too long for the terminal is wrapped, so the text never runs off the edge.
 
 Example:
 
@@ -251,7 +251,7 @@ Example:
         \b
         This is
         a paragraph
-        without rewrapping.
+        that keeps its line breaks.
 
         And this is a paragraph
         that will be rewrapped again.

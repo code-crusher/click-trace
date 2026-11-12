@@ -42,7 +42,8 @@ def wrap_text(
 
     If paragraphs are handled, a paragraph can be prefixed with an empty
     line containing the ``\\b`` character (``\\x08``) to indicate that
-    no rewrapping should happen in that block.
+    the line breaks in that block should be preserved. Lines are still
+    wrapped if they do not fit the width.
 
     :param text: the text that should be rewrapped.
     :param width: the maximum width for the text.
@@ -100,7 +101,7 @@ def wrap_text(
     for indent, raw, text in p:
         with wrapper.extra_indent(" " * indent):
             if raw:
-                rv.append(wrapper.indent_only(text))
+                rv.append(wrapper.fill_preserving_newlines(text))
             else:
                 rv.append(wrapper.fill(text))
 

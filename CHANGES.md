@@ -25,6 +25,9 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- A `\b` paragraph in help text keeps its line breaks, and each line is now
+  wrapped if it is longer than the available width. Previously such a line ran
+  past the edge of the terminal instead of wrapping. {issue}`3016`
 
 ## Version 8.5.1
 

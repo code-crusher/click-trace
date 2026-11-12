@@ -52,6 +52,104 @@ def test_basic_functionality(runner):
     ]
 
 
+def test_preserved_newlines_are_wrapped(runner):
+    @click.command()
+    def cli():
+        """First paragraph.
+
+        \b
+        This is a raw block whose first line is short
+        and the second line is long enough that it must wrap at this width.
+        """
+
+    result = runner.invoke(cli, ["--help"], terminal_width=50)
+    assert not result.exception
+    assert result.output.splitlines() == [
+        "Usage: cli [OPTIONS]",
+        "",
+        "  First paragraph.",
+        "",
+        "  This is a raw block whose first line is short",
+        "  and the second line is long enough that it must",
+        "  wrap at this width.",
+        "",
+        "Options:",
+        "  --help  Show this message and exit.",
+    ]
+
+
+def test_preserved_newlines_keep_indentation(runner):
+    @click.command()
+    def cli():
+        """\b
+        one
+          indented
+
+        three
+        """
+
+    result = runner.invoke(cli, ["--help"], terminal_width=60)
+    assert not result.exception
+    assert result.output.splitlines() == [
+        "Usage: cli [OPTIONS]",
+        "",
+        "  one",
+        "    indented",
+        "",
+        "  three",
+        "",
+        "Options:",
+        "  --help  Show this message and exit.",
+    ]
+
+
+def test_preserved_newlines_wrapped_line_keeps_its_indent(runner):
+    @click.command()
+    def cli():
+        """\b
+        command:
+            a nested line that is long enough to wrap at this width
+        """
+
+    result = runner.invoke(cli, ["--help"], terminal_width=40)
+    assert not result.exception
+    assert result.output.splitlines() == [
+        "Usage: cli [OPTIONS]",
+        "",
+        "  command:",
+        "      a nested line that is long enough",
+        "      to wrap at this width",
+        "",
+        "Options:",
+        "  --help  Show this message and exit.",
+    ]
+
+
+def test_option_help_preserved_newlines_are_wrapped(runner):
+    @click.command()
+    @click.option(
+        "--test",
+        type=click.Choice(["value1", "value2"]),
+        help="""\b
+        Example text to show word wrapping.
+        'Value1' - short comment.
+        'Value2' - A longer comment that should wrap to the next line.""",
+    )
+    def cmd(test):
+        pass
+
+    result = runner.invoke(cmd, ["--help"], terminal_width=60)
+    assert result.exit_code == 0
+    indent = " " * 26
+    assert (
+        "  --test [value1|value2]  Example text to show word\n"
+        f"{indent}wrapping.\n"
+        f"{indent}'Value1' - short comment.\n"
+        f"{indent}'Value2' - A longer comment that\n"
+        f"{indent}should wrap to the next line.\n"
+    ) in result.output
+
+
 def test_wrapping_long_options_strings(runner):
     @click.group()
     def cli():
