@@ -4,64 +4,18 @@ import collections.abc as cabc
 import textwrap
 from contextlib import contextmanager
 
-from ._compat import _ansi_re
 from ._compat import term_len
-
-
-def _truncate_visible(text: str, n: int) -> str:
-    """Return the longest prefix of ``text`` containing at most ``n`` visible
-    characters.
-
-    ANSI escape sequences inside the prefix are kept intact and do not count
-    toward the visible width. A cut is never placed inside an escape sequence.
-    """
-    if n <= 0:
-        return ""
-
-    visible = 0
-    i = 0
-    cut = 0
-    end = len(text)
-    while i < end:
-        m = _ansi_re.match(text, i)
-        if m is not None:
-            i = m.end()
-            continue
-        visible += 1
-        i += 1
-        cut = i
-        if visible >= n:
-            break
-    return text[:cut]
 
 
 class TextWrapper(textwrap.TextWrapper):
     """``textwrap.TextWrapper`` variant that measures widths by visible
     character count.
 
-    ANSI escape sequences embedded in chunks, indents, or the placeholder are
-    excluded from the width budget. Without this, styled help text (a styled
-    ``Usage:`` prefix, a colorized option name, ...) would be wrapped earlier
-    than its visible length warrants and tokens would split mid-word.
+    ANSI escape sequences embedded in chunks or indents are excluded from the
+    width budget. Without this, styled help text (a styled ``Usage:`` prefix,
+    a colorized option name, ...) would be wrapped earlier than its visible
+    length warrants.
     """
-
-    def _handle_long_word(
-        self,
-        reversed_chunks: list[str],
-        cur_line: list[str],
-        cur_len: int,
-        width: int,
-    ) -> None:
-        space_left = max(width - cur_len, 1)
-
-        if self.break_long_words:
-            last = reversed_chunks[-1]
-            cut = _truncate_visible(last, space_left)
-            res = last[len(cut) :]
-            cur_line.append(cut)
-            reversed_chunks[-1] = res
-        elif not cur_line:
-            cur_line.append(reversed_chunks.pop())
 
     def _wrap_chunks(self, chunks: list[str]) -> list[str]:
         """Wrap chunks counting widths in visible characters.
@@ -69,7 +23,7 @@ class TextWrapper(textwrap.TextWrapper):
         Mirrors the algorithm of :meth:`textwrap.TextWrapper._wrap_chunks`
         with every width measurement routed through
         :func:`click._compat.term_len` instead of :func:`len`, so ANSI escape
-        bytes in chunks, indents, or the placeholder do not inflate the count.
+        bytes in chunks or indents do not inflate the count.
 
         .. seealso::
             :class:`textwrap.TextWrapper` in the Python standard library documentation:
