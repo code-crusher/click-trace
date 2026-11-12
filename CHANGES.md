@@ -25,6 +25,10 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- A `\b` no-rewrap marker on a line in the middle of a help paragraph now
+  keeps the lines after it as written, instead of being joined into the
+  paragraph as a literal backspace character. Text before the marker is still
+  wrapped, and no blank line is added. {issue}`3010`
 
 ## Version 8.5.1
 

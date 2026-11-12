@@ -40,9 +40,10 @@ def wrap_text(
     `preserve_paragraphs` parameter is provided it will intelligently
     handle paragraphs (defined by two empty lines).
 
-    If paragraphs are handled, a paragraph can be prefixed with an empty
-    line containing the ``\\b`` character (``\\x08``) to indicate that
-    no rewrapping should happen in that block.
+    If paragraphs are handled, a line containing only the ``\\b`` character
+    (``\\x08``) indicates that the lines after it, up to the end of the
+    paragraph, should not be rewrapped.  The marker may start a paragraph or
+    appear in the middle of one; text before it is wrapped as usual.
 
     :param text: the text that should be rewrapped.
     :param width: the maximum width for the text.
@@ -58,6 +59,10 @@ def wrap_text(
         ``text``, ``initial_indent``, or ``subsequent_indent`` no longer
         count toward the width budget, so styled input wraps based on what
         the user sees instead of raw byte length.
+
+    .. versionchanged:: 8.6.0
+        A ``\\b`` line in the middle of a paragraph ends wrapping for the
+        rest of that paragraph, rather than being treated as literal text.
     """
     from ._textwrap import TextWrapper
 
@@ -71,17 +76,39 @@ def wrap_text(
     if not preserve_paragraphs:
         return wrapper.fill(text)
 
-    p: list[tuple[int, bool, str]] = []
+    paragraphs: list[list[tuple[int, bool, str]]] = []
     buf: list[str] = []
     indent = None
 
     def _flush_par() -> None:
         if not buf:
             return
-        if buf[0].strip() == "\b":
-            p.append((indent or 0, True, "\n".join(buf[1:])))
-        else:
-            p.append((indent or 0, False, " ".join(buf)))
+
+        # Split the paragraph on lines containing only the marker. Text before
+        # the first marker is joined and wrapped as usual; each segment after
+        # a marker keeps its source lines.
+        segments: list[tuple[bool, list[str]]] = []
+        lines: list[str] = []
+        raw = False
+
+        for line in buf:
+            if line.strip() == "\b":
+                if lines:
+                    segments.append((raw, lines))
+                lines = []
+                raw = True
+            else:
+                lines.append(line)
+
+        if lines:
+            segments.append((raw, lines))
+
+        paragraphs.append(
+            [
+                (indent or 0, raw, "\n".join(lines) if raw else " ".join(lines))
+                for raw, lines in segments
+            ]
+        )
         del buf[:]
 
     for line in text.splitlines():
@@ -97,12 +124,20 @@ def wrap_text(
     _flush_par()
 
     rv = []
-    for indent, raw, text in p:
-        with wrapper.extra_indent(" " * indent):
-            if raw:
-                rv.append(wrapper.indent_only(text))
-            else:
-                rv.append(wrapper.fill(text))
+
+    for segments in paragraphs:
+        rendered = []
+
+        for indent, raw, text in segments:
+            with wrapper.extra_indent(" " * indent):
+                if raw:
+                    rendered.append(wrapper.indent_only(text))
+                else:
+                    rendered.append(wrapper.fill(text))
+
+        # Segments of one paragraph are separated by a single newline; a blank
+        # line separates paragraphs.
+        rv.append("\n".join(rendered))
 
     return "\n\n".join(rv)
 

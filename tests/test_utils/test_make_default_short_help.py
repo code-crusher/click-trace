@@ -61,3 +61,27 @@ def test_make_default_short_help(value, max_length, alter, expect):
 
     out = click.utils._make_default_short_help(value, max_length)
     assert out == expect
+
+
+@pytest.mark.parametrize(
+    ("value", "expect"),
+    [
+        pytest.param(
+            "First line without a period\n\b\nraw line",
+            "First line without a period",
+            id="marker ends the summarized text",
+        ),
+        pytest.param(
+            "\b\nraw line\nmore raw",
+            "raw line more raw",
+            id="marker starts the paragraph",
+        ),
+    ],
+)
+def test_make_default_short_help_mid_paragraph_marker(value, expect):
+    """A ``\\b`` line does not leak into the short help, whether it starts the
+    paragraph or appears in the middle of it, see issue #3010.
+    """
+    out = click.utils._make_default_short_help(value)
+    assert out == expect
+    assert "\b" not in out

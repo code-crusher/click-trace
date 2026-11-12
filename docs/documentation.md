@@ -235,7 +235,7 @@ Click's default wrapping ignores single new lines and rewraps the text based on 
 
 ## Escaping Click's Wrapping
 
-Sometimes Click's wrapping can be a problem, such as when showing code examples where new lines are significant. This behavior can be escaped on a per-paragraph basis by adding a line with only `\b` . The `\b` is removed from the rendered help text.
+Sometimes Click's wrapping can be a problem, such as when showing code examples where new lines are significant. This behavior can be escaped by adding a line with only `\b` . The `\b` is removed from the rendered help text. Every line after the marker, up to the next blank line, is kept as written. The marker may also appear in the middle of a paragraph, in which case the text before it is wrapped normally and the lines after it are kept as written.
 
 Example:
 

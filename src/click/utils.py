@@ -65,11 +65,18 @@ def _make_default_short_help(help: str, max_length: int = 45) -> str:
     :meta private:
     """
     # Consider only the first paragraph and collapse newlines, tabs and spaces.
-    words = help.partition("\n\n")[0].split()
+    # A "no rewrap" marker line ends the text to summarize, unless the
+    # paragraph starts with it, in which case the lines after it are used.
+    words: list[str] = []
 
-    # The first paragraph started with a "no rewrap" marker, ignore it.
-    if words and words[0] == "\b":
-        words = words[1:]
+    for line in help.partition("\n\n")[0].splitlines():
+        if line.strip() == "\b":
+            if words:
+                break
+
+            continue
+
+        words.extend(line.split())
 
     if not words:
         return ""

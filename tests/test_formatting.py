@@ -381,6 +381,94 @@ def test_truncating_docstring_no_help(runner):
     ]
 
 
+def test_mid_paragraph_multiline_marker(runner):
+    """A ``\\b`` line in the middle of a paragraph ends wrapping for the
+    rest of that paragraph without adding a blank line, see issue #3010.
+    """
+
+    @click.command()
+    @click.option(
+        "--annotations",
+        help="""Specify the type of annotations to include in the XML output.
+        \b
+        'Disabled' - no annotations.
+        'Comment' - annotations as comments.""",
+    )
+    def cli(annotations):
+        pass
+
+    result = runner.invoke(cli, ["--help"], terminal_width=60)
+    assert not result.exception
+    assert "\b" not in result.output
+    assert result.output.splitlines() == [
+        "Usage: cli [OPTIONS]",
+        "",
+        "Options:",
+        "  --annotations TEXT  Specify the type of annotations to",
+        "                      include in the XML output.",
+        "                      'Disabled' - no annotations.",
+        "                      'Comment' - annotations as comments.",
+        "  --help              Show this message and exit.",
+    ]
+
+
+def test_mid_paragraph_multiline_marker_wraps_previous_text(runner):
+    """Text before the marker is still wrapped, and the raw lines after it
+    keep their own line breaks."""
+
+    @click.command()
+    def cli():
+        """This first paragraph is long enough that it has to be wrapped at
+        the given width.
+        \b
+        This line is not wrapped even though it is too long for the width.
+        This one is not either."""
+
+    result = runner.invoke(cli, ["--help"], terminal_width=60)
+    assert not result.exception
+    assert result.output.splitlines() == [
+        "Usage: cli [OPTIONS]",
+        "",
+        "  This first paragraph is long enough that it has to be",
+        "  wrapped at the given width.",
+        "  This line is not wrapped even though it is too long for the width.",
+        "  This one is not either.",
+        "",
+        "Options:",
+        "  --help  Show this message and exit.",
+    ]
+
+
+def test_mid_paragraph_multiline_marker_ends_at_paragraph_break(runner):
+    """A blank line ends the no-rewrap block, so the next paragraph is
+    wrapped again."""
+
+    @click.command()
+    def cli():
+        """Intro text.
+        \b
+        Raw line that is long enough to exceed the width of the terminal.
+        It is not wrapped.
+
+        A later paragraph that is long enough to be wrapped at the width."""
+
+    result = runner.invoke(cli, ["--help"], terminal_width=60)
+    assert not result.exception
+    assert result.output.splitlines() == [
+        "Usage: cli [OPTIONS]",
+        "",
+        "  Intro text.",
+        "  Raw line that is long enough to exceed the width of the terminal.",
+        "  It is not wrapped.",
+        "",
+        "  A later paragraph that is long enough to be wrapped at the",
+        "  width.",
+        "",
+        "Options:",
+        "  --help  Show this message and exit.",
+    ]
+
+
 def test_removing_multiline_marker(runner):
     @click.group()
     def cli():
