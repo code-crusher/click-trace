@@ -1103,6 +1103,10 @@ class Command:
         self.deprecated = deprecated
 
     def to_info_dict(self, ctx: Context) -> dict[str, t.Any]:
+        """
+        .. versionchanged:: 8.6.0
+            Adds the ``usage`` key, containing the output of :meth:`get_usage`.
+        """
         return {
             "name": self.name,
             "params": [param.to_info_dict() for param in self.get_params(ctx)],
@@ -1111,6 +1115,7 @@ class Command:
             "short_help": self.short_help,
             "hidden": self.hidden,
             "deprecated": self.deprecated,
+            "usage": self.get_usage(ctx),
         }
 
     def __repr__(self) -> str:

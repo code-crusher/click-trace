@@ -25,6 +25,9 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- {meth}`Command.to_info_dict` includes the command's `usage` line, so tools
+  generating documentation can use it directly instead of reconstructing it
+  from a context. {issue}`2992`
 
 ## Version 8.5.1
 

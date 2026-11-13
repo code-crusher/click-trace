@@ -74,8 +74,12 @@ HELLO_COMMAND = (
         "short_help": None,
         "hidden": False,
         "deprecated": False,
+        "usage": "Usage:  [OPTIONS]",
     },
 )
+# A command's usage includes the command path, so the same command reports a
+# different usage when it is reached through a parent context.
+HELLO_COMMAND_NESTED = {**HELLO_COMMAND[1], "usage": "Usage: hello [OPTIONS]"}
 HELLO_GROUP = (
     click.Group("cli", [HELLO_COMMAND[0]]),
     {
@@ -86,10 +90,16 @@ HELLO_GROUP = (
         "short_help": None,
         "hidden": False,
         "deprecated": False,
-        "commands": {"hello": HELLO_COMMAND[1]},
+        "commands": {"hello": HELLO_COMMAND_NESTED},
         "chain": False,
+        "usage": "Usage:  [OPTIONS] COMMAND [ARGS]...",
     },
 )
+HELLO_GROUP_NESTED = {
+    **HELLO_GROUP[1],
+    "commands": {"hello": {**HELLO_COMMAND[1], "usage": "Usage: cli hello [OPTIONS]"}},
+    "usage": "Usage: cli [OPTIONS] COMMAND [ARGS]...",
+}
 
 
 @pytest.mark.parametrize(
@@ -233,7 +243,7 @@ def test_parameter(obj, expect):
                 "hidden": False,
                 "deprecated": False,
                 "commands": {
-                    "cli": HELLO_GROUP[1],
+                    "cli": HELLO_GROUP_NESTED,
                     "test": {
                         "name": "test",
                         "params": [NAME_ARGUMENT[1], HELP_OPTION[1]],
@@ -242,9 +252,11 @@ def test_parameter(obj, expect):
                         "short_help": None,
                         "hidden": False,
                         "deprecated": False,
+                        "usage": "Usage: test [OPTIONS] NAME",
                     },
                 },
                 "chain": False,
+                "usage": "Usage:  [OPTIONS] COMMAND [ARGS]...",
             },
             id="Nested Group",
         ),
@@ -267,6 +279,17 @@ def test_context():
         "ignore_unknown_options": False,
         "auto_envvar_prefix": None,
     }
+
+
+def test_command_usage():
+    """The usage key matches get_usage, including the full command path."""
+    ctx = click.Context(HELLO_GROUP[0], info_name="mycli")
+    out = ctx.to_info_dict()
+
+    assert out["command"]["usage"] == HELLO_GROUP[0].get_usage(ctx)
+    assert (
+        out["command"]["commands"]["hello"]["usage"] == "Usage: mycli hello [OPTIONS]"
+    )
 
 
 def test_paramtype_no_name():
