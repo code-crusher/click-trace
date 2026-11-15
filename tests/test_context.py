@@ -778,3 +778,109 @@ def test_propagate_opt_prefixes():
     ctx = click.Context(click.Command("test2"), parent=parent)
 
     assert ctx._opt_prefixes == {"-", "--", "!"}
+
+
+def test_invoke_required_argument_missing(runner):
+    """A required argument not passed to ``Context.invoke`` raises
+    ``MissingParameter`` instead of being passed as ``None``.
+    """
+
+    @click.command()
+    @click.argument("arg", required=True)
+    def withparam(arg):
+        click.echo(f"withparam {arg}")
+
+    @click.command()
+    @click.pass_context
+    def withoutparam(ctx):
+        ctx.invoke(withparam)
+
+    @click.group()
+    def cli():
+        pass
+
+    cli.add_command(withparam)
+    cli.add_command(withoutparam)
+
+    result = runner.invoke(cli, ["withoutparam"])
+    assert result.exit_code == 2
+    assert "Missing argument 'ARG'" in result.output
+
+
+def test_invoke_required_option_missing(runner):
+    @click.command()
+    @click.option("--arg", required=True)
+    def withopt(arg):
+        click.echo(f"withopt {arg}")
+
+    @click.command()
+    @click.pass_context
+    def withoutopt(ctx):
+        ctx.invoke(withopt)
+
+    @click.group()
+    def cli():
+        pass
+
+    cli.add_command(withopt)
+    cli.add_command(withoutopt)
+
+    result = runner.invoke(cli, ["withoutopt"])
+    assert result.exit_code == 2
+    assert "Missing option '--arg'" in result.output
+
+
+def test_invoke_unrequired_param_fills_none(runner):
+    """Optional parameters keep being filled with ``None``/empty defaults."""
+
+    @click.command()
+    @click.argument("arg", required=False)
+    @click.option("--opt")
+    def cmd(arg, opt):
+        click.echo(f"cmd {arg!r} {opt!r}")
+
+    @click.command()
+    @click.pass_context
+    def caller(ctx):
+        ctx.invoke(cmd)
+
+    result = runner.invoke(caller, [], standalone_mode=False)
+    assert result.exception is None
+    assert result.output == "cmd None None\n"
+
+
+def test_invoke_param_supplied_explicitly(runner):
+    """Explicitly passed values take precedence and required checks pass."""
+
+    @click.command()
+    @click.argument("arg", required=True)
+    @click.option("--num", default=3)
+    def withparam(arg, num):
+        click.echo(f"withparam {arg} {num}")
+
+    @click.command()
+    @click.pass_context
+    def caller(ctx):
+        ctx.invoke(withparam, arg="hello", num=1)
+
+    result = runner.invoke(caller, [], standalone_mode=False)
+    assert result.exception is None
+    assert result.output == "withparam hello 1\n"
+
+
+def test_invoke_required_param_default(runner):
+    """A required parameter with a default uses the default, as before."""
+
+    @click.command()
+    @click.option("--arg", default="x", required=True)
+    def withopt(arg):
+        click.echo(f"withopt {arg}")
+
+    @click.command()
+    @click.pass_context
+    def caller(ctx):
+        ctx.invoke(withopt)
+
+    result = runner.invoke(caller, [], standalone_mode=False)
+    assert result.exception is None
+    assert result.output == "withopt x\n"

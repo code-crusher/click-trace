@@ -220,7 +220,9 @@ They work similarly, but the difference is that {func}`Context.invoke` merely
 invokes another command with the arguments you provide as a caller,
 whereas {func}`Context.forward` fills in the arguments from the current
 command. Both accept the command as the first argument, and everything else
-is passed onwards as you would expect.
+is passed onwards as you would expect. Missing parameters use their default
+values; a required parameter that is not passed and has no default raises
+{exc}`MissingParameter`.
 
 Example:
 

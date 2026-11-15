@@ -900,6 +900,10 @@ class Context:
             All ``kwargs`` are tracked in :attr:`params` so they will be
             passed if :meth:`forward` is called at multiple levels.
 
+        .. versionchanged:: 8.6
+            A required parameter without a value raises
+            :exc:`MissingParameter`, instead of passing ``None``.
+
         .. versionchanged:: 3.2
             A new context is created, and missing arguments use default values.
         """
@@ -918,12 +922,19 @@ class Context:
             for param in other_cmd.params:
                 if param.name not in kwargs and param.expose_value:
                     default_value = param.get_default(ctx)
-                    # We explicitly hide the :attr:`UNSET` value to the user, as we
-                    # choose to make it an implementation detail. And because ``invoke``
-                    # has been designed as part of Click public API, we return ``None``
-                    # instead.
+
                     if default_value is UNSET:
+                        if param.required:
+                            # Mirror what parsing does for a required parameter
+                            # that receives no value.
+                            raise MissingParameter(ctx=ctx, param=param)
+
+                        # We explicitly hide the :attr:`UNSET` value to the user, as
+                        # we choose to make it an implementation detail. And because
+                        # ``invoke`` has been designed as part of Click public API, we
+                        # return ``None`` instead.
                         default_value = None
+
                     kwargs[param.name] = param.type_cast_value(ctx, default_value)
 
             # Track all kwargs as params, so that forward() will pass

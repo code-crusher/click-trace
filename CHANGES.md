@@ -25,6 +25,9 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- {meth}`Context.invoke` raises {exc}`MissingParameter` when the invoked command
+  has a required parameter that is not passed and has no default. The
+  parameter's value was silently passed as `None`. {issue}`2801`
 
 ## Version 8.5.1
 
