@@ -230,6 +230,44 @@ as `default` will be interpreted as a list of characters.
     invoke(commit, args=['-m', 'foo', '-m', 'bar', '-m', 'here'])
 ```
 
+(multiple-values-in-one-token)=
+
+### Comma-Separated Values in One Option
+
+Click does not split a single option token into several values. `--items a,b`
+is one value, `a,b`. To accept a comma-separated list in one token, combine
+`multiple=True` with a callback that splits each occurrence:
+
+```{eval-rst}
+.. click:example::
+
+    def split_commas(ctx, param, value):
+        out = []
+        for item in value:
+            out.extend(part.strip() for part in item.split(",") if part.strip())
+        return tuple(out)
+
+    @click.command()
+    @click.option('--tag', multiple=True, callback=split_commas)
+    def build(tag):
+        click.echo(', '.join(tag))
+
+.. click:run::
+
+    invoke(build, args=['--tag', 'a,b', '--tag', ' c ', '--tag', 'd'])
+```
+
+The callback runs after the option's values are collected, so splitting the
+strings there works regardless of how many times the option is given. The
+same approach works with any separator, such as `;` or `|`.
+
+An option that takes several values with `nargs` does not support this, and
+an option that takes an arbitrary number of values with no separator, like
+`--items a b c`, is not supported: Click would not know where the option's
+values end and the next argument begins. `nargs` must stay bounded, and
+`multiple=True` requires repeating the flag. Both constraints are parser
+limitations tracked in [pallets/click#2771](https://github.com/pallets/click/issues/2771).
+
 ## Combining short options
 
 Short options made of a single character can be combined into one argument: `-abc` is equivalent to `-a -b -c`. This is the standard POSIX behavior for short option stacking, and it is the reason a repeated flag like `-vvv` works with the [Counting](#counting) feature.

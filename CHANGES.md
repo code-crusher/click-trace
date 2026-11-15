@@ -25,6 +25,14 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- Document workarounds for several long-standing parser limitations: splitting
+  comma-separated values with `multiple=True` and a callback, accepting
+  negative numbers by passing `--` or by setting `ignore_unknown_options`,
+  validating an option against choices derived from another option's value,
+  reading the spelling a user passed with {attr}`Parameter.opts`, and
+  rebuilding a normalized command line from a parsed context. Also document
+  that some of these cannot be done with the current parser and are tracked
+  for the parser rewrite. {issue}`2834`
 
 ## Version 8.5.1
 

@@ -95,6 +95,8 @@ And from the command line:
    more about how to handle files in parameters.
 ```
 
+(argument-escape-sequences)=
+
 ## Argument Escape Sequences
 
 If you want to process arguments that look like options, like a file
@@ -140,6 +142,42 @@ And from the command line:
 
     invoke(touch, ['-foo.txt', 'bar.txt'])
 ```
+
+(negative-numbers)=
+
+## Negative Numbers
+
+Click treats any token starting with a dash as an option, so `-1` passed to
+an argument declared with `type=int` is rejected with `No such option
+'-1'.`. Click cannot tell a negative number apart from an option at the
+parser level, so there are two workarounds:
+
+1. Put `--` before the number, as shown above.
+2. Set `ignore_unknown_options` to `True` so tokens that do not match a
+   known option are treated as arguments. This also accepts numbers like
+   `-2.5` and `-1e3`:
+
+```{eval-rst}
+.. click:example::
+
+    @click.command(context_settings={"ignore_unknown_options": True})
+    @click.argument('number', type=float)
+    def add(number):
+        click.echo(number)
+
+And from the command line:
+
+.. click:run::
+
+    invoke(add, args=['-2.5'])
+```
+
+The second form is only safe when the command has no options that could be
+mistyped for a negative number, because an unknown option such as `--verbse`
+is passed through as an argument instead of being reported as an error. A
+command that declares options cannot use this approach. Native support for
+negative numbers is not planned before the parser is rewritten. See
+[pallets/click#2676](https://github.com/pallets/click/issues/2676).
 
 (environment-variables)=
 

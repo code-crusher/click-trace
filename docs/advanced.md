@@ -178,6 +178,43 @@ What's more recommended is to pass the information in a wrapper, however:
 
 ```
 
+## Reading an Option's Spelling in a Callback
+
+A callback receives the {class}`~click.Parameter` object as its second
+argument. The {attr}`~click.Parameter.name` attribute is the internal
+name Click derives from the declarations, so a callback cannot rely on it to
+recover how the user spelled the option. For most options the two differ
+(`--output-file` becomes `output_file`), and for an option whose declaration is
+not a valid Python identifier and which is used with `expose_value=False`, the
+internal name is the empty string, so there is nothing to read.
+
+To identify which spelling the user passed, or to key bookkeeping off it, read
+{attr}`~click.Parameter.opts` (and {attr}`~click.Parameter.secondary_opts` for
+the false side of a boolean flag) instead:
+
+```{eval-rst}
+.. click:example::
+
+    def record(ctx, param, value):
+        if value is not None:
+            ctx.ensure_object(dict).setdefault('seen', []).append(param.opts[-1])
+        return value
+
+    @click.command()
+    @click.option('--foo.foo', expose_value=False, callback=record)
+    @click.pass_obj
+    def cli(obj):
+        click.echo(', '.join(obj.get('seen', [])))
+
+.. click:run::
+
+    invoke(cli, args=['--foo.foo', 'x'])
+```
+
+An explicit identifier name keeps both channels available:
+`@click.option('--foo.foo', 'foo_foo', ...)` sets the internal name to
+`foo_foo` while `param.opts` still reports `['--foo.foo']`.
+
 ## Token Normalization
 
 ```{versionadded} 2.0

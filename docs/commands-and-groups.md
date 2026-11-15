@@ -424,3 +424,70 @@ enum.
     invoke(cli, prog_name='cli', args=[])
     println()
 ```
+
+### Rebuilding the Command Line From the Context
+
+`get_parameter_source` also makes it possible to reconstruct a normalized
+command line from a parsed context. This is useful to store the effective
+invocation of a command for replay, caching, or logging: sort each
+declaration into a stable order, skip parameters the user did not set, and
+re-emit the rest in one canonical spelling. There is no built-in helper for
+this, but the pieces are all public:
+
+```{eval-rst}
+.. click:example::
+
+    import click
+
+    def normalized_argv(command, ctx):
+        argv = []
+        for param in command.params:
+            source = ctx.get_parameter_source(param.name)
+            if source is None or source is click.ParameterSource.DEFAULT:
+                continue
+            value = ctx.params[param.name]
+            if isinstance(param, click.Option):
+                flag = param.opts[-1]
+                if param.is_flag:
+                    if value:
+                        argv.append(flag)
+                elif param.count:
+                    argv.extend([flag] * value)
+                elif param.multiple:
+                    for item in value:
+                        argv += [flag, str(item)]
+                elif param.nargs != 1:
+                    argv.append(flag)
+                    argv.extend(str(v) for v in value)
+                else:
+                    argv += [flag, str(value)]
+            else:
+                argv.extend(str(v) for v in value)
+        return argv
+
+    @click.command()
+    @click.option('--times', default=1, type=int)
+    @click.option('-v', '--verbose', 'verbose', count=True)
+    @click.option('--item', 'items', multiple=True)
+    @click.argument('files', nargs=-1)
+    @click.pass_context
+    def cli(ctx, times, verbose, items, files):
+        click.echo(' '.join(normalized_argv(ctx.command, ctx)))
+
+.. click:run::
+
+    invoke(cli, args=['--item', 'b', '-vv', '--times', '3', '--item', 'a', 'f1'])
+    invoke(cli, args=['f1'])
+```
+
+The result is deterministic: parameters are emitted in declaration order, the
+last spelling of each option is used, defaults are omitted, and flag and count
+options collapse to repeated occurrences. `multiple` values keep the order the
+user supplied them in. Two invocations that mean the same thing therefore
+serialize to the same list.
+
+This example is intentionally minimal. It does not quote arguments containing
+spaces or shell metacharacters, handle boolean flag pairs with both
+spellings, or restore `--` before values that look like options. A full
+serializer has to address all three, plus `envvar` and `default_map` sources,
+if it is meant to be replayed through a shell.

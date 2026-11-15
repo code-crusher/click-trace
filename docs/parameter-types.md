@@ -255,3 +255,55 @@ the converted value type ({class}`!ParamType[int]` for an integer-returning
 type) so that {meth}`~ParamType.convert` and downstream consumers carry the
 narrowed type.
 ```
+
+(parameter-types-contextual)=
+
+## Choices That Depend on Other Parameters
+
+The built-in {class}`Choice` type validates against a fixed list. To pick the
+accepted values based on another parameter, write a custom type whose
+`convert` reads the context, and make the controlling option eager so it is
+parsed before the dependent one:
+
+```{eval-rst}
+.. click:example::
+
+    class ChoiceFrom(click.ParamType):
+        name = "choice"
+
+        def __init__(self, source):
+            self.source = source
+
+        def convert(self, value, param, ctx):
+            choices = list(self.source(ctx))
+            if value not in choices:
+                self.fail(f"{value!r} is not one of {', '.join(choices)}",
+                          param, ctx)
+            return value
+
+    def record_choice(ctx, param, value):
+        ctx.meta['choices'] = {'a': ['x'], 'b': ['y', 'z']}[value]
+        return value
+
+    @click.command()
+    @click.option('--mode', type=click.Choice(['a', 'b']), default='a',
+                  is_eager=True, callback=record_choice)
+    @click.option('--tag', type=ChoiceFrom(lambda ctx: ctx.meta['choices']))
+    def cli(mode, tag):
+        click.echo(f"mode={mode} tag={tag}")
+
+.. click:run::
+
+    invoke(cli, args=['--mode', 'b', '--tag', 'y'])
+```
+
+`is_eager=True` on `--mode` makes Click process it before `--tag`, so
+`ctx.meta` is populated by the time `convert` runs, even if the user types
+`--tag` before `--mode`. Without `is_eager`, conversion happens in the order
+the options were given on the command line, and a `--tag` before `--mode`
+would be validated against the wrong choice set.
+
+This is a workaround, not a supported feature. The completion metadata does
+not change, so tab completion and `--help` still show the `--mode` choices
+but not the `--tag` ones. A `Choice` that accepts a callable is tracked in
+[pallets/click#928](https://github.com/pallets/click/issues/928).
