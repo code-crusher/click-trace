@@ -25,6 +25,9 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- A {exc}`ClickException` raised while resolving shell completion, such as from a
+  custom {meth}`Group.get_command`, is shown as an error message instead of
+  propagating as a traceback. {issue}`2853`
 
 ## Version 8.5.1
 

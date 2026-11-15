@@ -1656,6 +1656,11 @@ class Command:
             the completion instruction. Defaults to
             ``_{PROG_NAME}_COMPLETE``.
 
+        .. versionchanged:: 8.6.0
+            A :exc:`ClickException` raised while resolving completions, such as
+            from a custom :meth:`Group.get_command`, is shown as an error
+            message instead of propagating as a traceback.
+
         .. versionchanged:: 8.2.0
             Dots (``.``) in ``prog_name`` are replaced with underscores (``_``).
         """
@@ -1670,7 +1675,12 @@ class Command:
 
         from .shell_completion import shell_complete
 
-        rv = shell_complete(self, ctx_args, prog_name, complete_var, instruction)
+        try:
+            rv = shell_complete(self, ctx_args, prog_name, complete_var, instruction)
+        except ClickException as e:
+            e.show()
+            sys.exit(e.exit_code)
+
         sys.exit(rv)
 
     def __call__(self, *args: t.Any, **kwargs: t.Any) -> t.Any:

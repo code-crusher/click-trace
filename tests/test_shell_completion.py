@@ -391,6 +391,64 @@ def test_full_complete(runner, shell, env, expect):
     assert result.output == expect
 
 
+class _AmbiguousPrefixGroup(Group):
+    """A group from the alias docs that fails when a prefix is ambiguous."""
+
+    def get_command(self, ctx, cmd_name):
+        rv = super().get_command(ctx, cmd_name)
+
+        if rv is not None:
+            return rv
+
+        matches = [x for x in self.list_commands(ctx) if x.startswith(cmd_name)]
+
+        if not matches:
+            return None
+
+        if len(matches) == 1:
+            return super().get_command(ctx, matches[0])
+
+        ctx.fail(f"Too many matches: {', '.join(sorted(matches))}")
+
+
+@pytest.mark.usefixtures("_patch_for_completion")
+def test_complete_usage_error_is_shown(runner):
+    """A UsageError raised while resolving completions is shown as an error
+    message, not as a traceback. {issue}`2853`
+    """
+    cli = _AmbiguousPrefixGroup("cli", commands=[Command("interfaces"), Command("ip")])
+    result = runner.invoke(
+        cli,
+        env={
+            "COMP_WORDS": "cli i ",
+            "COMP_CWORD": "2",
+            "_CLI_COMPLETE": "bash_complete",
+        },
+    )
+    assert result.exit_code == 2
+    assert result.exception is not None
+    assert isinstance(result.exception, SystemExit)
+    assert result.stdout == ""
+    assert "Error: Too many matches: interfaces, ip" in result.stderr
+
+
+@pytest.mark.usefixtures("_patch_for_completion")
+def test_complete_usage_error_still_completes(runner):
+    """Completion keeps working when the prefix resolves to one command."""
+    cli = _AmbiguousPrefixGroup("cli", commands=[Command("interfaces"), Command("ip")])
+    result = runner.invoke(
+        cli,
+        env={
+            "COMP_WORDS": "cli inte ",
+            "COMP_CWORD": "2",
+            "_CLI_COMPLETE": "bash_complete",
+        },
+    )
+    assert result.exit_code == 0
+    assert result.exception is None
+    assert result.stderr == ""
+
+
 def test_source_uses_lf_line_endings(monkeypatch):
     stdout = io.BytesIO()
     stream = io.TextIOWrapper(stdout, encoding="utf-8", newline="\r\n")
