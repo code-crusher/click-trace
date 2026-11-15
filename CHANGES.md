@@ -2,6 +2,9 @@
 
 Unreleased
 
+- {class}`Option` accepts `nargs=-1` when a single non-whitespace `separator`
+  character is given, allowing an option to collect an arbitrary number of
+  values from the command line, e.g. `--option 1, 2, 3`. {issue}`2771`
 - A parameter name that is not a valid Python identifier, or that is a Python
   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
 - An {class}`Option` name written as a Python identifier is deprecated when it

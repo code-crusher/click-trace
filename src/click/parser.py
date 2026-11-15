@@ -133,6 +133,7 @@ class _Option:
         action: str | None = None,
         nargs: int = 1,
         const: t.Any | None = None,
+        separator: str | None = None,
     ):
         self._short_opts = []
         self._long_opts = []
@@ -160,6 +161,7 @@ class _Option:
         self.action = action
         self.nargs = nargs
         self.const = const
+        self.separator = separator
         self.obj = obj
 
     @property
@@ -270,6 +272,7 @@ class _OptionParser:
         action: str | None = None,
         nargs: int = 1,
         const: t.Any | None = None,
+        separator: str | None = None,
     ) -> None:
         """Adds a new option named `dest` to the parser.  The destination
         is not inferred (unlike with optparse) and needs to be explicitly
@@ -280,7 +283,15 @@ class _OptionParser:
         that is returned from the parser.
         """
         opts = [_normalize_opt(opt, self.ctx) for opt in opts]
-        option = _Option(obj, opts, dest, action=action, nargs=nargs, const=const)
+        option = _Option(
+            obj,
+            opts,
+            dest,
+            action=action,
+            nargs=nargs,
+            const=const,
+            separator=separator,
+        )
         self._opt_prefixes.update(option.prefixes)
         for opt in option._short_opts:
             self._short_opt[opt] = option
@@ -461,6 +472,32 @@ class _OptionParser:
                 value = FLAG_NEEDS_VALUE
             else:
                 value = state.rargs.pop(0)
+        elif nargs == -1 and option.separator is not None:
+            # A variadic option (nargs=-1) with a separator collects an
+            # arbitrary number of values. Tokens that end with the separator
+            # are values and signal that more values follow. The first token
+            # that does not end with the separator is the final value, unless
+            # it looks like the start of another option.
+            values: list[str] = []
+            while state.rargs and state.rargs[0].endswith(option.separator):
+                values.extend(state.rargs.pop(0)[:-1].split(option.separator))
+            if state.rargs and not (
+                state.rargs[0][:1] in self._opt_prefixes and len(state.rargs[0]) > 1
+            ):
+                values.extend(state.rargs.pop(0).split(option.separator))
+            if not values:
+                if option.obj._flag_needs_value:
+                    # Option allows omitting the value.
+                    value = FLAG_NEEDS_VALUE
+                else:
+                    raise BadOptionUsage(
+                        option_name,
+                        _("Option {name!r} requires an argument.").format(
+                            name=option_name
+                        ),
+                    )
+            else:
+                value = tuple(values)
         else:
             value = tuple(state.rargs[:nargs])
             del state.rargs[:nargs]

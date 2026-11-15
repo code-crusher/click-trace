@@ -168,6 +168,117 @@ def test_invalid_nargs(runner):
             pass
 
 
+@pytest.mark.parametrize(
+    "args",
+    [
+        # nargs=-1 requires a separator.
+        lambda: click.Option(["--foo"], nargs=-1),
+        # separator requires nargs=-1.
+        lambda: click.Option(["--foo"], separator=","),
+        # separator must be a single non-whitespace character.
+        lambda: click.Option(["--foo"], nargs=-1, separator=",,"),
+        lambda: click.Option(["--foo"], nargs=-1, separator=" "),
+    ],
+)
+def test_invalid_nargs_separator(args):
+    with pytest.raises(TypeError):
+        args()
+
+
+def test_nargs_minus_one_with_separator(runner):
+    @click.command()
+    @click.option("--option", nargs=-1, separator=",")
+    def cli(option):
+        click.echo(option)
+
+    # Each token ending in the separator continues collecting values, the
+    # next token is the final value.
+    result = runner.invoke(cli, ["--option", "1,", "2,", "3"])
+    assert not result.exception
+    assert result.output == "('1', '2', '3')\n"
+
+    # A single token with the separator in the middle also works.
+    result = runner.invoke(cli, ["--option", "1,2,3"])
+    assert not result.exception
+    assert result.output == "('1', '2', '3')\n"
+
+    # An explicitly attached value is split on the separator.
+    result = runner.invoke(cli, ["--option=1,2,3"])
+    assert not result.exception
+    assert result.output == "('1', '2', '3')\n"
+
+    # A trailing separator on the last token is stripped.
+    result = runner.invoke(cli, ["--option", "1,", "2,", "3,"])
+    assert not result.exception
+    assert result.output == "('1', '2', '3')\n"
+
+    # A single value without the separator is accepted.
+    result = runner.invoke(cli, ["--option", "3"])
+    assert not result.exception
+    assert result.output == "('3',)\n"
+
+
+def test_nargs_minus_one_with_separator_stops_at_option(runner):
+    @click.command()
+    @click.option("--option", nargs=-1, separator=",")
+    @click.option("--other", is_flag=True)
+    def cli(option, other):
+        click.echo(f"option={option} other={other}")
+
+    # The option after the values is not consumed as a value.
+    result = runner.invoke(cli, ["--option", "1,", "2,", "--other"])
+    assert not result.exception
+    assert result.output == "option=('1', '2') other=True\n"
+
+    # A final value that looks like an option must end with the separator.
+    result = runner.invoke(cli, ["--option", "1,", "2,", "-3,"])
+    assert not result.exception
+    assert result.output == "option=('1', '2', '-3') other=False\n"
+
+    # Without the trailing separator it is treated as an unknown option.
+    result = runner.invoke(cli, ["--option", "1,", "2,", "-3"])
+    assert result.exit_code == 2
+    assert "No such option '-3'" in result.output
+
+
+def test_nargs_minus_one_with_separator_requires_argument(runner):
+    @click.command()
+    @click.option("--option", nargs=-1, separator=",")
+    @click.option("--other", is_flag=True)
+    def cli(option, other):
+        click.echo(option)
+
+    result = runner.invoke(cli, ["--option"])
+    assert result.exit_code == 2
+    assert "Error: Option '--option' requires an argument." in result.output
+
+    result = runner.invoke(cli, ["--option", "--other"])
+    assert result.exit_code == 2
+    assert "Error: Option '--option' requires an argument." in result.output
+
+
+def test_nargs_minus_one_with_separator_type_conversion(runner):
+    @click.command()
+    @click.option("--num", nargs=-1, separator=",", type=int)
+    def cli(num):
+        click.echo(num)
+
+    result = runner.invoke(cli, ["--num", "1,", "2,", "3"])
+    assert not result.exception
+    assert result.output == "(1, 2, 3)\n"
+
+
+def test_nargs_minus_one_with_separator_multiple(runner):
+    @click.command()
+    @click.option("--item", nargs=-1, separator=";", multiple=True)
+    def cli(item):
+        click.echo(item)
+
+    result = runner.invoke(cli, ["--item", "1;", "2", "--item", "3;", "4"])
+    assert not result.exception
+    assert result.output == "(('1', '2'), ('3', '4'))\n"
+
+
 def test_nargs_tup_composite_mult(runner):
     @click.command()
     @click.option("--item", type=(str, int), multiple=True)

@@ -3077,6 +3077,11 @@ class Option(Parameter):
                      multiple times and recorded.  This is similar to ``nargs``
                      in how it works but supports arbitrary number of
                      arguments.
+    :param separator: the separator that is used to split the value of a
+        variadic option (``nargs=-1``) into multiple values. It must be a
+        single non-whitespace character. Values are separated by it, and a
+        trailing separator on a command line token continues collecting the
+        following tokens as part of the same value.
     :param count: this flag makes an option increment an integer.
     :param allow_from_autoenv: if this is enabled then the value of this
                                parameter will be pulled from an environment
@@ -3131,6 +3136,7 @@ class Option(Parameter):
     show_default: bool | str | None
     show_choices: bool
     show_envvar: bool
+    separator: str | None
 
     def __init__(
         self,
@@ -3151,6 +3157,7 @@ class Option(Parameter):
         show_choices: bool = True,
         show_envvar: bool = False,
         deprecated: bool | str = False,
+        separator: str | None = None,
         **attrs: t.Any,
     ) -> None:
         super().__init__(
@@ -3205,6 +3212,7 @@ class Option(Parameter):
         self.show_default = show_default
         self.show_choices = show_choices
         self.show_envvar = show_envvar
+        self.separator = separator
 
         # Phase 5: validate. Raises on illegal kwarg combinations.
         self._validate(prompt, deprecated)
@@ -3337,7 +3345,13 @@ class Option(Parameter):
             return
         if deprecated and prompt:
             raise ValueError("`deprecated` options cannot use `prompt`.")
-        if self.nargs == -1:
+        if self.separator is not None and self.nargs != -1:
+            raise TypeError("'separator' is only valid with nargs=-1.")
+        if self.separator is not None and (
+            len(self.separator) != 1 or self.separator.isspace()
+        ):
+            raise TypeError("'separator' must be a single non-whitespace character.")
+        if self.nargs == -1 and self.separator is None:
             raise TypeError("nargs=-1 is not supported for options.")
         if not self.is_bool_flag and self.secondary_opts:
             raise TypeError("Secondary flag is not valid for non-boolean flag.")
@@ -3368,6 +3382,7 @@ class Option(Parameter):
             flag_value=self.flag_activation_value,
             count=self.count,
             hidden=self.hidden,
+            separator=self.separator,
         )
         return info_dict
 
@@ -3540,6 +3555,7 @@ class Option(Parameter):
                 dest=self.name,
                 action=action,
                 nargs=self.nargs,
+                separator=self.separator,
             )
 
     def get_help_spec(self, ctx: Context) -> str:

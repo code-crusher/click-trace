@@ -25,6 +25,7 @@ HELP_OPTION = (
         "flag_value": True,
         "count": False,
         "hidden": False,
+        "separator": None,
     },
 )
 NAME_ARGUMENT = (
@@ -62,6 +63,7 @@ NUMBER_OPTION = (
         "flag_value": None,
         "count": False,
         "hidden": False,
+        "separator": None,
     },
 )
 HELLO_COMMAND = (
@@ -203,6 +205,7 @@ HELLO_GROUP = (
                 "flag_value": True,
                 "count": False,
                 "hidden": False,
+                "separator": None,
             },
             id="Flag Option",
         ),
@@ -329,6 +332,13 @@ def test_argument_to_info_dict_nargs():
     info = arg.to_info_dict()
     assert info["nargs"] == -1
     assert info["help"] == "files to process"
+
+
+def test_option_to_info_dict_separator():
+    opt = click.Option(["--item"], nargs=-1, separator=",")
+    info = opt.to_info_dict()
+    assert info["nargs"] == -1
+    assert info["separator"] == ","
 
 
 def test_command_to_info_dict_multiple_arguments():

@@ -145,8 +145,31 @@ the type.
 ## Multi Value Options
 
 To make an option take multiple values, pass in `nargs`. Note you may pass in
-any positive integer, but not -1. The values are passed to the decorated
-function as a tuple.
+any positive integer. The values are passed to the decorated function as a
+tuple.
+
+To make an option take an arbitrary number of values, pass in `nargs=-1` and a
+`separator`. The separator must be a single non-whitespace character. It splits
+the value into multiple values. On the command line, a value token that ends
+with the separator continues collecting the following tokens as part of the
+same value, and the first token that does not end with the separator is the
+final value. This allows writing `--option 1, 2, 3` instead of repeating
+`--option` once per value.
+
+```{eval-rst}
+.. click:example::
+
+    @click.command()
+    @click.option('--pos', nargs=-1, separator=',', type=float)
+    def findme(pos):
+        a, b, c = pos
+        click.echo(f"{a} / {b} / {c}")
+
+.. click:run::
+
+    invoke(findme, args=['--pos', '1.0,', '2.0,', '3.0'])
+
+```
 
 ```{eval-rst}
 .. click:example::
