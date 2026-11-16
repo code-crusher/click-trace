@@ -51,16 +51,6 @@ recognized, otherwise {data}`STRING` is used. If no default value is
 provided, the type is assumed to be {data}`STRING`. See
 {ref}`type-inference` for the types that are recognized.
 
-```{admonition} Note on Required Arguments
-:class: note
-
-   It is possible to make an argument required by setting
-   `required=True`. It is not recommended since we think command line
-   tools should gracefully degrade into becoming no ops. We think this
-   because command line tools are often invoked with wildcard inputs
-   and they should not error out if the wildcard is empty.
-```
-
 ## Multiple Arguments
 
 To set the number of argument use the `nargs` kwarg. It can be set to
@@ -93,6 +83,18 @@ And from the command line:
    This is not how you should handle files and files paths. This
    merely used as a simple example. See {ref}`handling-files` to learn
    more about how to handle files in parameters.
+```
+
+```{admonition} Note on Required Variadic Arguments
+:class: note
+
+   A variadic argument is not required by default, so a command
+   invoked with no values for it runs as a no-op. It can be made to
+   require at least one value by setting `required=True`, but this is
+   not recommended. Command line tools are often invoked with wildcard
+   inputs, and they should not error out if the wildcard expands to
+   nothing. Gracefully degrading into becoming a no-op is friendlier in
+   pipelines, where a command may legitimately receive no values.
 ```
 
 ## Argument Escape Sequences
