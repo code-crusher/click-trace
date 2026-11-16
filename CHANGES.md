@@ -25,6 +25,12 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- {meth}`Context.invoke` and {meth}`Context.forward` now record where each
+  parameter value came from, so {meth}`Context.get_parameter_source` works in
+  the invoked command. Values forwarded from the current context keep the
+  source they had there, keyword arguments passed to `invoke` report
+  `COMMANDLINE`, and values filled in from a default report `DEFAULT` or
+  `DEFAULT_MAP`. {issue}`2753`
 
 ## Version 8.5.1
 

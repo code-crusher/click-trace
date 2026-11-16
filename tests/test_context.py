@@ -772,6 +772,182 @@ def test_parameter_source(runner, option_args, invoke_args, expect):
     assert rv.return_value == expect
 
 
+@pytest.mark.parametrize(
+    ("invoke_kwargs", "expect"),
+    [
+        pytest.param({}, ParameterSource.DEFAULT, id="default"),
+        pytest.param(
+            {"option": 3},
+            ParameterSource.COMMANDLINE,
+            id="explicit keyword argument",
+        ),
+    ],
+)
+def test_invoke_command_parameter_source(runner, invoke_kwargs, expect):
+    """``invoke`` reports where the value came from."""
+
+    @click.command()
+    @click.option("--option", default=1)
+    @click.pass_context
+    def sub(ctx, option):
+        return ctx.get_parameter_source("option")
+
+    @click.command()
+    @click.pass_context
+    def cli(ctx):
+        return ctx.invoke(sub, **invoke_kwargs)
+
+    rv = runner.invoke(cli, standalone_mode=False)
+    assert rv.return_value == expect
+
+
+def test_invoke_command_parameter_source_default_map(runner):
+    """``invoke`` inherits the default map nested under the subcommand's name."""
+
+    @click.command()
+    @click.option("--option", default=1)
+    @click.pass_context
+    def sub(ctx, option):
+        return ctx.get_parameter_source("option")
+
+    @click.command()
+    @click.pass_context
+    def cli(ctx):
+        return ctx.invoke(sub)
+
+    rv = runner.invoke(cli, standalone_mode=False, default_map={"sub": {"option": 5}})
+    assert rv.return_value == ParameterSource.DEFAULT_MAP
+
+
+def test_forward_parameter_source_follows_parent(runner):
+    """The forwarded command sees where the value came from in the parent."""
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def sub(ctx, count):
+        return ctx.get_parameter_source("count")
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def cli(ctx, count):
+        return ctx.forward(sub)
+
+    rv = runner.invoke(cli, ["--count", "7"], standalone_mode=False)
+    assert rv.return_value == ParameterSource.COMMANDLINE
+
+    rv = runner.invoke(cli, [], standalone_mode=False)
+    assert rv.return_value == ParameterSource.DEFAULT
+
+
+def test_invoke_parameter_source_is_default(runner):
+    """Plain ``invoke`` does not inherit the parent's sources."""
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def sub(ctx, count):
+        return ctx.get_parameter_source("count")
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def cli(ctx, count):
+        return ctx.invoke(sub)
+
+    rv = runner.invoke(cli, ["--count", "7"], standalone_mode=False)
+    assert rv.return_value == ParameterSource.DEFAULT
+
+
+def test_forward_explicit_kwarg_overrides_source(runner):
+    """An explicit kwarg passed to ``forward`` counts as the caller's input."""
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def sub(ctx, count):
+        return ctx.get_parameter_source("count")
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def cli(ctx, count):
+        return ctx.forward(sub, count=42)
+
+    rv = runner.invoke(cli, ["--count", "7"], standalone_mode=False)
+    assert rv.return_value == ParameterSource.COMMANDLINE
+
+
+def test_forward_propagates_default_map_source(runner):
+    """A value from the parent's default_map keeps its source when forwarded."""
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def sub(ctx, count):
+        return ctx.get_parameter_source("count")
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def cli(ctx, count):
+        return ctx.forward(sub)
+
+    rv = runner.invoke(cli, [], default_map={"count": 9}, standalone_mode=False)
+    assert rv.return_value == ParameterSource.DEFAULT_MAP
+
+
+def test_forward_multilevel_parameter_source(runner):
+    """Sources survive multiple levels of forwarding."""
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def leaf(ctx, count):
+        return ctx.get_parameter_source("count")
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def middle(ctx, count):
+        return ctx.forward(leaf)
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.pass_context
+    def top(ctx, count):
+        return ctx.forward(middle)
+
+    rv = runner.invoke(top, ["--count", "3"], standalone_mode=False)
+    assert rv.return_value == ParameterSource.COMMANDLINE
+
+    rv = runner.invoke(top, [], standalone_mode=False)
+    assert rv.return_value == ParameterSource.DEFAULT
+
+
+def test_invoke_missing_parameter_gets_default_source(runner):
+    """A parameter filled in by ``invoke`` reports where the default came from."""
+
+    @click.command()
+    @click.option("--count", default=1)
+    @click.argument("name", required=False, default="foo")
+    @click.pass_context
+    def sub(ctx, count, name):
+        return (
+            ctx.get_parameter_source("count"),
+            ctx.get_parameter_source("name"),
+        )
+
+    @click.command()
+    @click.pass_context
+    def cli(ctx):
+        return ctx.invoke(sub)
+
+    rv = runner.invoke(cli, standalone_mode=False, default_map={"sub": {"name": "bar"}})
+    assert rv.return_value == (ParameterSource.DEFAULT, ParameterSource.DEFAULT_MAP)
+
+
 def test_propagate_opt_prefixes():
     parent = click.Context(click.Command("test"))
     parent._opt_prefixes = {"-", "--", "!"}

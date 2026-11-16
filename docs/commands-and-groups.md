@@ -405,6 +405,13 @@ value, or {attr}`Context.default_map`. The
 out. It will return a member of the {class}`~click.core.ParameterSource`
 enum.
 
+When a command is called from another command with {meth}`Context.invoke`
+or {meth}`Context.forward`, the invoked command's context also tracks the
+source of its parameters: values forwarded from the current context keep
+the source they had there, keyword arguments passed to `invoke` report
+`COMMANDLINE`, and values filled in from a default report `DEFAULT` or
+`DEFAULT_MAP`.
+
 ```{eval-rst}
 .. click:example::
 

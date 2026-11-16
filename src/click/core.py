@@ -235,6 +235,21 @@ class ParameterSource(enum.IntEnum):
     """Used the default specified by the parameter."""
 
 
+def _parameter_source_of_default(ctx: Context, param: Parameter) -> ParameterSource:
+    """Report where the default value of ``param`` comes from.
+
+    Mirrors the resolution done by :meth:`Parameter.get_default`, which is
+    what :meth:`Context.invoke` uses to fill in missing values: the default
+    map first, then the parameter's own default. Environment variables are
+    not consulted there, so they don't show up here either; they are
+    resolved by :meth:`Parameter.consume_value` during regular parsing and
+    for values forwarded from a parsed parent context.
+    """
+    if ctx.lookup_default(param.name) is not None or ctx._default_map_has(param.name):
+        return ParameterSource.DEFAULT_MAP
+    return ParameterSource.DEFAULT
+
+
 class Context:
     """The context is a special internal object that holds state relevant
     for the script execution at every single level.  It's normally invisible
@@ -365,6 +380,7 @@ class Context:
     _depth: int
     _parameter_source: dict[str, ParameterSource]
     _param_default_explicit: dict[str, bool]
+    _pending_source_hints: dict[str, ParameterSource] | None
     _exit_stack: ExitStack
 
     def __init__(
@@ -535,6 +551,9 @@ class Context:
         self._close_callbacks = []
         self._depth = 0
         self._parameter_source = {}
+        # One-shot hand-off of parameter sources from ``forward`` to the
+        # ``invoke`` call it makes.
+        self._pending_source_hints = None
         # Tracks whether the option that currently owns each parameter slot in
         # :attr:`params` had its ``default`` set explicitly by the user. Used to
         # tie-break feature-switch groups where multiple options share a parameter name
@@ -884,7 +903,11 @@ class Context:
     def invoke(self, callback: Command, /, *args: t.Any, **kwargs: t.Any) -> t.Any: ...
 
     def invoke(
-        self, callback: Command | t.Callable[..., V], /, *args: t.Any, **kwargs: t.Any
+        self,
+        callback: Command | t.Callable[..., V],
+        /,
+        *args: t.Any,
+        **kwargs: t.Any,
     ) -> t.Any | V:
         """Invokes a command callback in exactly the way it expects.  There
         are two ways to invoke this method:
@@ -896,6 +919,16 @@ class Context:
             (options and click arguments) must be keyword arguments and Click
             will fill in defaults.
 
+        .. versionchanged:: 8.6.0
+            The new context tracks :meth:`get_parameter_source` for the
+            parameters of the invoked command. Values passed as keyword
+            arguments are reported as :attr:`ParameterSource.COMMANDLINE`,
+            values inherited from the current context through
+            :meth:`forward` keep the source they had, and values filled in
+            from a default are reported as :attr:`ParameterSource.DEFAULT`
+            or :attr:`ParameterSource.DEFAULT_MAP`. Note that ``invoke``
+            never reads environment variables, so it never reports
+            :attr:`ParameterSource.ENVIRONMENT`.
         .. versionchanged:: 8.0
             All ``kwargs`` are tracked in :attr:`params` so they will be
             passed if :meth:`forward` is called at multiple levels.
@@ -904,6 +937,12 @@ class Context:
             A new context is created, and missing arguments use default values.
         """
         if isinstance(callback, Command):
+            # Source hints are handed over from ``forward`` through an
+            # instance attribute rather than a keyword argument so they
+            # cannot collide with a parameter of the invoked command.
+            hints = self._pending_source_hints
+            self._pending_source_hints = None
+
             other_cmd = callback
 
             if other_cmd.callback is None:
@@ -915,16 +954,31 @@ class Context:
 
             ctx = self._make_sub_context(other_cmd)
 
+            # Values ``forward`` filled in from this context carry the source
+            # they had here; everything else passed by the caller is treated
+            # as coming from the command line, and values filled in from a
+            # default are resolved the same way parsing would resolve them.
+            # The sources are recorded so ``get_parameter_source`` works in
+            # the invoked command.
+            hints = hints or {}
+
             for param in other_cmd.params:
-                if param.name not in kwargs and param.expose_value:
-                    default_value = param.get_default(ctx)
-                    # We explicitly hide the :attr:`UNSET` value to the user, as we
-                    # choose to make it an implementation detail. And because ``invoke``
-                    # has been designed as part of Click public API, we return ``None``
-                    # instead.
-                    if default_value is UNSET:
-                        default_value = None
-                    kwargs[param.name] = param.type_cast_value(ctx, default_value)
+                if param.name is None:
+                    continue
+                if param.name not in kwargs:
+                    if param.expose_value:
+                        default_value = param.get_default(ctx)
+                        # We explicitly hide the :attr:`UNSET` value to the
+                        # user, as we choose to make it an implementation
+                        # detail. And because ``invoke`` has been designed as
+                        # part of Click public API, we return ``None`` instead.
+                        if default_value is UNSET:
+                            default_value = None
+                        kwargs[param.name] = param.type_cast_value(ctx, default_value)
+                    source = _parameter_source_of_default(ctx, param)
+                else:
+                    source = hints.get(param.name, ParameterSource.COMMANDLINE)
+                ctx.set_parameter_source(param.name, source)
 
             # Track all kwargs as params, so that forward() will pass
             # them on in subsequent calls.
@@ -940,6 +994,11 @@ class Context:
         arguments from the current context if the other command expects
         it.  This cannot invoke callbacks directly, only other commands.
 
+        .. versionchanged:: 8.6.0
+            The invoked command's context records where each parameter
+            value comes from, so :meth:`get_parameter_source` works there.
+            Values forwarded from this context keep the source they had
+            here.
         .. versionchanged:: 8.0
             All ``kwargs`` are tracked in :attr:`params` so they will be
             passed if ``forward`` is called at multiple levels.
@@ -948,11 +1007,22 @@ class Context:
         if not isinstance(cmd, Command):
             raise TypeError("Callback is not a command.")
 
+        hints = {
+            name: source
+            for name in self.params
+            if name not in kwargs
+            and (source := self.get_parameter_source(name)) is not None
+        }
+
         for param in self.params:
             if param not in kwargs:
                 kwargs[param] = self.params[param]
 
-        return self.invoke(cmd, *args, **kwargs)
+        self._pending_source_hints = hints
+        try:
+            return self.invoke(cmd, *args, **kwargs)
+        finally:
+            self._pending_source_hints = None
 
     def set_parameter_source(self, name: str, source: ParameterSource) -> None:
         """Set the source of a parameter. This indicates the location
