@@ -5,6 +5,7 @@ from collections.abc import Mapping
 
 import pytest
 
+import click
 import click.shell_completion
 from click.core import Argument
 from click.core import Command
@@ -16,6 +17,7 @@ from click.shell_completion import FishComplete
 from click.shell_completion import PowerShellComplete
 from click.shell_completion import shell_complete
 from click.shell_completion import ShellComplete
+from click.testing import CliRunner
 from click.types import Choice
 from click.types import File
 from click.types import Path
@@ -141,6 +143,26 @@ def test_argument_default():
     assert _get_words(cli, ["a"], "b") == ["b"]
     # ignore type validation
     assert _get_words(cli, ["x"], "b") == ["b"]
+
+
+def test_option_default_not_called():
+    # A callable default is not called during shell completion, which
+    # happens during resilient parsing. It may be expensive or have
+    # side effects. https://github.com/pallets/click/issues/2614
+    calls = []
+
+    def default():
+        calls.append("called")
+        return "computed"
+
+    cli = Command("cli", params=[Option(["-c"], default=default)])
+    _get_words(cli, [], "")
+    assert calls == []
+
+    # Outside completion, the default is still called as usual.
+    runner = CliRunner()
+    assert runner.invoke(cli, []).exit_code == 0
+    assert calls == ["called"]
 
 
 def test_type_choice():

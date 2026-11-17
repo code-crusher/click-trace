@@ -2,6 +2,9 @@
 
 Unreleased
 
+- A callable `default` is no longer evaluated during shell completion (resilient
+  parsing), matching the behavior before Click 8.0. Expensive or side-effecting
+  default callbacks no longer run when the user presses tab. {issue}`2614`
 - A parameter name that is not a valid Python identifier, or that is a Python
   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
 - An {class}`Option` name written as a Python identifier is deprecated when it

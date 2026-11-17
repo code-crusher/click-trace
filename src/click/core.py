@@ -276,9 +276,10 @@ class Context:
                               add some safety mapping on the right.
     :param resilient_parsing: if this flag is enabled then Click will
                               parse without any interactivity or callback
-                              invocation.  Default values will also be
-                              ignored.  This is useful for implementing
-                              things such as completion support.
+                              invocation.  Callable default values will
+                              also not be evaluated.  This is useful for
+                              implementing things such as completion
+                              support.
     :param allow_extra_args: if this is set to `True` then extra arguments
                              at the end will not raise an error and will be
                              kept on the context.  The default is to inherit
@@ -2641,6 +2642,11 @@ class Parameter(ABC):
         :param call: If the default is a callable, call it. Disable to
             return the callable instead.
 
+        .. versionchanged:: 8.6.0
+            Callable defaults are not evaluated in resilient parsing mode
+            (used by shell completion), as they may be expensive or have
+            side effects.
+
         .. versionchanged:: 8.0.2
             Type casting is no longer performed when getting a default.
 
@@ -2708,7 +2714,12 @@ class Parameter(ABC):
                     value = self.type.split_envvar_value(value)
 
         if value is UNSET:
-            default_value = self.get_default(ctx)
+            # Don't call callable defaults during resilient parsing (such as
+            # shell completion), as they may be expensive or have side
+            # effects. The default is kept raw instead, matching how
+            # ``Option.get_default`` treats a callable ``flag_value``.
+            default_value = self.get_default(ctx, call=not ctx.resilient_parsing)
+
             if default_value is not UNSET:
                 value = default_value
                 source = ParameterSource.DEFAULT
