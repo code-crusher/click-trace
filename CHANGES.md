@@ -2,6 +2,9 @@
 
 Unreleased
 
+- An {class}`Option` with `expose_value=False` keeps its derived name even when
+  that name is not a valid Python identifier, instead of naming it `""`. This
+  lets a callback tell unexposed options such as `--foo.bar` apart. {issue}`2768`
 - A parameter name that is not a valid Python identifier, or that is a Python
   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
 - An {class}`Option` name written as a Python identifier is deprecated when it

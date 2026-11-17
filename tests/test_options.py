@@ -1558,16 +1558,49 @@ def test_option_name_must_be_an_identifier():
 
 
 def test_option_prompt_still_guards_against_a_nameless_option():
-    """An unexposed option can still be named ``""``, which ``prompt=True`` refuses."""
+    """An unexposed option with no declaration is named ``""``, which ``prompt=True``
+    refuses."""
     with pytest.warns(DeprecationWarning, match="not a valid Python identifier"):
         with pytest.raises(TypeError, match="'name' is required with 'prompt=True'"):
-            click.Option(["--0-file"], expose_value=False, prompt=True)
+            click.Option([], expose_value=False, prompt=True)
 
 
 def test_option_name_check_applies_when_not_exposed():
-    """An unexposed option is named ``""``, and says Click 9.0 will refuse it."""
+    """An unexposed option keeps its derived name, and says Click 9.0 will refuse it."""
     with pytest.warns(DeprecationWarning, match="not a valid Python identifier"):
-        assert click.Option(["--0foo"], expose_value=False).name == ""
+        assert click.Option(["--0foo"], expose_value=False).name == "0foo"
+
+
+def test_option_unexposed_keeps_a_name_that_is_not_an_identifier(runner):
+    """An unexposed option's name reaches its callback and tells options apart.
+
+    A declaration such as ``--foo.foo`` cannot name a Python argument, so it is
+    only usable when it is not exposed. The callback still needs a name to tell
+    which option it was called for, so the derived name is kept rather than
+    discarded.
+    """
+    seen = {}
+
+    def record(ctx, param, value):
+        seen[param.name] = value
+
+    with pytest.warns(DeprecationWarning, match="not a valid Python identifier"):
+
+        @click.command()
+        @click.option("--foo.foo", expose_value=False, callback=record)
+        @click.option("--bar.bar", expose_value=False, callback=record)
+        @click.option("--baz-baz", expose_value=False, callback=record)
+        def cmd(**kwargs):
+            click.echo(repr(kwargs))
+
+    assert [p.name for p in cmd.params] == ["foo.foo", "bar.bar", "baz_baz"]
+
+    result = runner.invoke(
+        cmd, ["--foo.foo", "1", "--bar.bar", "2", "--baz-baz", "3"]
+    )
+    assert not result.exception
+    assert result.output == "{}\n"
+    assert seen == {"foo.foo": "1", "bar.bar": "2", "baz_baz": "3"}
 
 
 def test_option_explicit_name_carries_a_refused_declaration(runner):

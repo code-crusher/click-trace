@@ -2348,6 +2348,10 @@ class Parameter(ABC):
     :class:`Option` takes the declaration with the longest prefix, so
     ``"-t", "--times"`` names ``times``, while an :class:`Argument` takes its
     single declaration.
+
+    A parameter with ``expose_value=False`` is never passed to the callback, so
+    its name need not be a valid identifier: ``--foo.bar`` names ``foo.bar``.
+    Click 9.0 refuses such a name all the same.
     """
     opts: list[str]
     """Every command-line spelling that designates this parameter.
@@ -3476,7 +3480,10 @@ class Option(Parameter):
         if name is None or not name.isidentifier():
             if not expose_value:
                 self._check_name_is_usable(name or "", decls)
-                return "", opts, secondary_opts
+                # Keep the derived name rather than discarding it. The parser
+                # still needs a distinct ``dest`` per option, and a callback
+                # reads the name to identify the declaration it was called for.
+                return name or "", opts, secondary_opts
 
             raise TypeError(
                 _(
