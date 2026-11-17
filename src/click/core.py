@@ -102,7 +102,7 @@ def _check_nested_chain(
 
 def _echo_aborted() -> None:
     """Write the final abort message to standard error."""
-    echo(_("Aborted!"), file=sys.stderr)
+    echo(_("Aborted!"), err=True)
 
 
 def _outside_click_stacklevel(skip: cabc.Container[str] = ()) -> int:
@@ -1613,7 +1613,7 @@ class Command:
                 report = _echo_aborted
             except (EOFError, KeyboardInterrupt) as e:
                 # The blank line closes the terminal's ``^C`` echo.
-                echo(file=sys.stderr)
+                echo(err=True)
 
                 if not standalone_mode:
                     raise Abort() from e

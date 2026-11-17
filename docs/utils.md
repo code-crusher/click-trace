@@ -45,6 +45,40 @@ You can also easily print to standard error by passing `err=True`:
 click.echo('Hello World!', err=True)
 ```
 
+(override-streams)=
+
+## Overriding the Standard Streams
+
+```{versionadded} 8.6.0
+```
+
+When embedding Click in an application that does not write to the process
+standard streams — a network server handling several connections at once, for
+example — use {func}`override_streams` to make Click's console output write to
+your own streams:
+
+```python
+import click
+
+@click.command()
+def cli():
+    click.echo('Hello from a connection')
+
+with connection:
+    # Click's output goes to this connection's streams.
+    with click.override_streams(stdout=connection.stdout, stderr=connection.stderr):
+        cli.main(args, standalone_mode=False)
+```
+
+While the context manager is active, {func}`echo` without an explicit `file`,
+{func}`prompt`, {func}`confirm`, {func}`progressbar`, {func}`echo_via_pager`,
+the `--help` option, and Click's error and abort messages all write to the
+given streams. Click reads the streams for each thread and asyncio task, so
+concurrent handlers can use different streams at the same time; set them inside
+each handler, since a thread that started earlier does not see them. Click does
+not close the streams, and does not pass them to code outside its own console
+output — use the same streams for the rest of the application's output.
+
 (ansi-colors)=
 
 ## ANSI Colors

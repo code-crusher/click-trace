@@ -71,6 +71,7 @@ from .utils import echo as echo
 from .utils import format_filename as format_filename
 from .utils import get_app_dir as get_app_dir
 from .utils import open_file as open_file
+from .utils import override_streams as override_streams
 
 
 def __getattr__(name: str) -> object:

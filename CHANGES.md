@@ -2,6 +2,13 @@
 
 Unreleased
 
+- Add {func}`override_streams`, a context manager that makes Click's console
+  output — {func}`echo` without an explicit `file`, prompts, progress bars,
+  the pager, the help option, and error and abort messages — write to given
+  streams instead of `sys.stdout` and `sys.stderr`. The streams are stored in
+  context variables, so embedding Click in an application such as a server
+  with concurrent connections no longer requires patching private functions
+  or swapping the process-global standard streams. {issue}`2361`
 - A parameter name that is not a valid Python identifier, or that is a Python
   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
 - An {class}`Option` name written as a Python identifier is deprecated when it

@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import typing as t
+from contextvars import ContextVar
 from types import TracebackType
 from weakref import WeakKeyDictionary
 
@@ -572,9 +573,46 @@ def _make_cached_stream_func(
     return func
 
 
+# Streams that Click's console output functions write to instead of
+# ``sys.stdout`` and ``sys.stderr`` when set. Assigned by
+# :func:`click.override_streams`. They are context vars, so concurrent
+# threads and asyncio tasks can each use their own streams.
+_stdout_override: ContextVar[t.IO[t.Any] | None] = ContextVar(
+    "click_stdout_override", default=None
+)
+_stderr_override: ContextVar[t.IO[t.Any] | None] = ContextVar(
+    "click_stderr_override", default=None
+)
+
 _default_text_stdin = _make_cached_stream_func(lambda: sys.stdin, get_text_stdin)
-_default_text_stdout = _make_cached_stream_func(lambda: sys.stdout, get_text_stdout)
-_default_text_stderr = _make_cached_stream_func(lambda: sys.stderr, get_text_stderr)
+_cached_text_stdout = _make_cached_stream_func(lambda: sys.stdout, get_text_stdout)
+_cached_text_stderr = _make_cached_stream_func(lambda: sys.stderr, get_text_stderr)
+
+
+def _default_text_stdout() -> t.TextIO | None:
+    """The stream Click writes text output to when no stream is given: the
+    stream set by :func:`click.override_streams` if any, otherwise the
+    wrapped ``sys.stdout``.
+    """
+    override = _stdout_override.get()
+
+    if override is not None:
+        return t.cast(t.TextIO, override)
+
+    return _cached_text_stdout()
+
+
+def _default_text_stderr() -> t.TextIO | None:
+    """The stream Click writes text errors to when no stream is given: the
+    stream set by :func:`click.override_streams` if any, otherwise the
+    wrapped ``sys.stderr``.
+    """
+    override = _stderr_override.get()
+
+    if override is not None:
+        return t.cast(t.TextIO, override)
+
+    return _cached_text_stderr()
 
 
 binary_streams: cabc.Mapping[str, t.Callable[[], t.BinaryIO]] = {

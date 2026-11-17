@@ -644,7 +644,7 @@ def _tempfilepager(
     import subprocess
     import tempfile
 
-    encoding = get_best_encoding(sys.stdout)
+    encoding = get_best_encoding(_default_text_stdout() or sys.stdout)
     # On Windows, NamedTemporaryFile cannot be opened by another process
     # while Python still has it open, so we use delete=False and clean up manually
     # rather than using a contextmanager here.
@@ -963,8 +963,10 @@ else:
         with raw_terminal() as fd:
             ch = os.read(fd, 32).decode(get_best_encoding(sys.stdin), "replace")
 
-            if echo and isatty(sys.stdout):
-                sys.stdout.write(ch)
+            stdout = _default_text_stdout() or sys.stdout
+
+            if echo and isatty(stdout):
+                stdout.write(ch)
 
             _translate_ch_to_exc(ch)
             return ch

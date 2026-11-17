@@ -5,7 +5,7 @@ import typing as t
 from gettext import gettext as _
 from gettext import ngettext
 
-from ._compat import get_text_stderr
+from ._compat import _default_text_stderr
 from .globals import resolve_color_default
 from .utils import echo
 from .utils import format_filename
@@ -56,7 +56,7 @@ class ClickException(Exception):
 
     def show(self, file: t.IO[t.Any] | None = None) -> None:
         if file is None:
-            file = get_text_stderr()
+            file = _default_text_stderr()
 
         echo(
             _("Error: {message}").format(message=self.format_message()),
@@ -86,7 +86,7 @@ class UsageError(ClickException):
 
     def show(self, file: t.IO[t.Any] | None = None) -> None:
         if file is None:
-            file = get_text_stderr()
+            file = _default_text_stderr()
         color = None
         hint = ""
         if (

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc as cabc
+import contextlib
 import os
 import re
 import sys
@@ -13,6 +14,8 @@ from types import TracebackType
 from ._compat import _default_text_stderr
 from ._compat import _default_text_stdout
 from ._compat import _find_binary_writer
+from ._compat import _stderr_override
+from ._compat import _stdout_override
 from ._compat import binary_streams
 from ._compat import open_stream
 from ._compat import should_strip_ansi
@@ -516,6 +519,67 @@ def get_app_dir(app_name: str, roaming: bool = True, force_posix: bool = False) 
         os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")),
         _posixify(app_name),
     )
+
+
+@contextlib.contextmanager
+def override_streams(
+    stdout: t.IO[t.Any] | None = None, stderr: t.IO[t.Any] | None = None
+) -> cabc.Iterator[None]:
+    """Make Click's console output functions write to the given streams.
+
+    While the context manager is active, :func:`echo` (without an explicit
+    ``file``), :func:`prompt`, :func:`confirm`, :func:`progressbar`,
+    :func:`echo_via_pager`, the help option, and Click's error and abort
+    messages write to the given streams instead of ``sys.stdout`` and
+    ``sys.stderr``. This makes it possible to embed Click in an application
+    that talks to its own streams, such as a network server handling
+    multiple concurrent connections.
+
+    Click reads the streams for each thread and asyncio task, so
+    concurrent handlers can use different streams at the same time. A
+    handler thread that starts before the streams are set does not see
+    them; set the streams inside the handler instead.
+
+    Click does not close the streams and does not pass them to code
+    outside its own console output, so a program using this to redirect
+    output should use the same streams for the rest of its output.
+
+    Example:
+
+    .. code-block:: python
+
+        import io
+
+        import click
+
+        @click.command()
+        def cli():
+            click.echo("hello")
+
+        buffer = io.StringIO()
+
+        with click.override_streams(stdout=buffer, stderr=buffer):
+            cli.main([], standalone_mode=False)
+
+        assert buffer.getvalue() == "hello\\n"
+
+    :param stdout: The stream to write text output to. If ``None``,
+        ``sys.stdout`` is used.
+    :param stderr: The stream to write text errors to. If ``None``,
+        ``sys.stderr`` is used.
+
+    .. versionadded:: 8.6.0
+    """
+    stdout_token = _stdout_override.set(stdout) if stdout is not None else None
+    stderr_token = _stderr_override.set(stderr) if stderr is not None else None
+
+    try:
+        yield
+    finally:
+        if stderr_token is not None:
+            _stderr_override.reset(stderr_token)
+        if stdout_token is not None:
+            _stdout_override.reset(stdout_token)
 
 
 class _PacifyFlushWrapper:

@@ -13,6 +13,9 @@ from contextlib import redirect_stdout
 from gettext import gettext as _
 
 from . import _compat
+from ._compat import _default_text_stdout
+from ._compat import _stderr_override
+from ._compat import _stdout_override
 from ._compat import isatty
 from ._compat import strip_ansi
 from .exceptions import Abort
@@ -92,6 +95,21 @@ def _readline_prompt(func: t.Callable[[str], str], text: str, err: bool) -> str:
     this the prompt would keep codes that :func:`echo` removes from the
     rest of the output.
     """
+    # Honor a stream set by ``override_streams`` so the prompt goes to the
+    # same place as the rest of the output. Without one, the real standard
+    # stream is used: ``input()`` writes the prompt to ``sys.stdout``, so
+    # redirecting to a wrapped stream could double-write or re-encode it.
+    override = _stderr_override.get() if err else _stdout_override.get()
+
+    if override is not None:
+        if _compat.should_strip_ansi(override, resolve_color_default()):
+            text = strip_ansi(text)
+
+        # The prompt function, such as ``input()``, writes the prompt to
+        # ``sys.stdout``, so redirect that to the override stream.
+        with redirect_stdout(override):
+            return func(text)
+
     stream = sys.stderr if err else sys.stdout
 
     # Look up ``should_strip_ansi`` on the module so that ``CliRunner``,
@@ -606,7 +624,9 @@ def clear() -> None:
 
     .. versionadded:: 2.0
     """
-    if not isatty(sys.stdout):
+    stdout = _default_text_stdout() or sys.stdout
+
+    if not isatty(stdout):
         return
 
     # ANSI escape \033[2J clears the screen, \033[1;1H moves the cursor
@@ -1006,7 +1026,9 @@ def pause(info: str | None = None, err: bool = False) -> None:
     :param err: if set to message goes to ``stderr`` instead of
                 ``stdout``, the same as with echo.
     """
-    if not isatty(sys.stdin) or not isatty(sys.stdout):
+    stdout = _default_text_stdout() or sys.stdout
+
+    if not isatty(sys.stdin) or not isatty(stdout):
         return
 
     if info is None:

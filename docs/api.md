@@ -73,6 +73,10 @@ classes and functions.
 ```
 
 ```{eval-rst}
+.. autofunction:: override_streams
+```
+
+```{eval-rst}
 .. autofunction:: echo_via_pager
 ```
 
