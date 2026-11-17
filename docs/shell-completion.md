@@ -168,7 +168,9 @@ See {ref}`custom-completions-show-the-full-value` in the FAQ for why these value
 Value completions for a parameter can be customized without a custom type by providing a `shell_complete` function. The
 function is used instead of any completion provided by the type. It is passed 3 positional arguments:
 
-- `ctx` - The current command context.
+- `ctx` - The current command context. Its `params` attribute contains the values
+  parsed from the command line so far, so a callback can depend on what the user has
+  already typed, regardless of whether those values belong to options or arguments.
 - `param` - The current parameter requesting completion.
 - `incomplete` - The partial word that is being completed. May be an empty string if no characters have been entered
   yet.

@@ -305,12 +305,26 @@ class _OptionParser:
         will be memorized multiple times as well.
         """
         state = _ParsingState(args)
+
         try:
             self._process_args_for_options(state)
+        except UsageError:
+            if self.ctx is None or not self.ctx.resilient_parsing:
+                raise
+
+            # In resilient parsing mode, keep going so that positional values
+            # collected before the error are still available, for example to
+            # the completion callback of the option that is being completed.
+            # Anything left in ``rargs`` may be a partially consumed option
+            # value, so it must not be treated as a positional value.
+            state.rargs = []
+
+        try:
             self._process_args_for_args(state)
         except UsageError:
             if self.ctx is None or not self.ctx.resilient_parsing:
                 raise
+
         return state.opts, state.largs, state.order
 
     def _process_args_for_args(self, state: _ParsingState) -> None:

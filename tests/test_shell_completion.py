@@ -253,6 +253,38 @@ def test_option_custom():
     assert _get_words(cli, ["a", "b"], "c") == ["C"]
 
 
+def test_option_complete_sees_parsed_arguments():
+    # Issue #2184: completing an option's value must expose the values of
+    # arguments typed before it through ctx.params.
+    seen = {}
+
+    def complete(ctx, param, incomplete):
+        seen.update(ctx.params)
+        return []
+
+    cli = Command(
+        "cli",
+        params=[Argument(["type"]), Option(["--test"], shell_complete=complete)],
+    )
+    _get_completions(cli, ["foo", "--test"], "")
+    assert seen == {"type": "foo", "test": None}
+
+
+def test_argument_complete_sees_parsed_options():
+    seen = {}
+
+    def complete(ctx, param, incomplete):
+        seen.update(ctx.params)
+        return []
+
+    cli = Command(
+        "cli",
+        params=[Argument(["type"], shell_complete=complete), Option(["--test"])],
+    )
+    _get_completions(cli, ["--test", "bar"], "")
+    assert seen == {"test": "bar", "type": None}
+
+
 def test_option_multiple():
     cli = Command(
         "type",
