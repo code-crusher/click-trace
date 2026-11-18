@@ -365,6 +365,7 @@ class Context:
     _depth: int
     _parameter_source: dict[str, ParameterSource]
     _param_default_explicit: dict[str, bool]
+    _parsed_opts: dict[str, t.Any] | None
     _exit_stack: ExitStack
 
     def __init__(
@@ -540,6 +541,11 @@ class Context:
         # tie-break feature-switch groups where multiple options share a parameter name
         # and both fall back to their default value.
         self._param_default_explicit = {}
+        # The values the parser produced for the current invocation, kept while the
+        # parameters are processed. Eager parameters such as ``--help`` can be
+        # handled before the others, and the help page reads :attr:`params`, so the
+        # not yet processed values are filled in on demand from here.
+        self._parsed_opts: dict[str, t.Any] | None = None
         self._exit_stack = ExitStack()
 
     @property
@@ -1260,10 +1266,85 @@ class Command:
         """Formats the help into a string and returns it.
 
         Calls :meth:`format_help` internally.
+
+        .. versionchanged:: 8.6.0
+            Parameters that were not processed yet are available in
+            :attr:`Context.params` while the help is formatted.
         """
         formatter = ctx.make_formatter()
-        self.format_help(ctx, formatter)
+
+        with self._fill_unprocessed_params(ctx):
+            self.format_help(ctx, formatter)
+
         return formatter.getvalue().rstrip("\n")
+
+    @contextmanager
+    def _fill_unprocessed_params(self, ctx: Context) -> cabc.Iterator[None]:
+        """Expose the parameters that were not processed yet while rendering.
+
+        The automatic help option is eager, so the help page is rendered before
+        the other parameters are handled. Code reached from the help page, such
+        as :meth:`Group.list_commands`, reads :attr:`Context.params` and would
+        only see the eager parameters. Fill in the remaining values for the
+        duration of the block, without prompting, running callbacks, or
+        reporting errors. They are removed afterwards so the rest of the parse
+        is not affected.
+        """
+        opts = ctx._parsed_opts
+
+        if opts is None:
+            yield
+            return
+
+        added: dict[str, t.Any] = {}
+        sources: dict[str, ParameterSource] = {}
+        previous_sources: dict[str, ParameterSource] = {}
+        # Prompts are skipped, and values that cannot be converted are left out
+        # rather than failing, since showing help must not depend on them.
+        resilient = ctx.resilient_parsing
+        ctx.resilient_parsing = True
+
+        try:
+            for param in self.get_params(ctx):
+                if not param.expose_value or param.name in ctx.params:
+                    continue
+
+                try:
+                    value, source = param.consume_value(ctx, opts)
+
+                    if value is UNSET:
+                        # Store what a completed parse stores for a parameter
+                        # that was not given on the command line.
+                        value = () if (param.multiple or param.nargs == -1) else None
+                    else:
+                        value = param.type_cast_value(ctx, value)
+                except Exception:
+                    continue
+
+                added[param.name] = value
+                sources[param.name] = source
+        finally:
+            ctx.resilient_parsing = resilient
+
+        for name, source in sources.items():
+            if name in ctx._parameter_source:
+                previous_sources[name] = ctx._parameter_source[name]
+
+            ctx._parameter_source[name] = source
+
+        ctx.params.update(added)
+
+        try:
+            yield
+        finally:
+            for name in added:
+                del ctx.params[name]
+
+            for name in sources:
+                if name in previous_sources:
+                    ctx._parameter_source[name] = previous_sources[name]
+                else:
+                    del ctx._parameter_source[name]
 
     def get_short_help_str(self, limit: int = 45) -> str:
         """Gets short help for the command or makes it by shortening the
@@ -1396,8 +1477,17 @@ class Command:
         parser = self.make_parser(ctx)
         opts, args, param_order = parser.parse_args(args=args)
 
-        for param in iter_params_for_processing(param_order, self.get_params(ctx)):
-            _, args = param.handle_parse_result(ctx, opts, args)
+        # Keep the parsed values reachable while the parameters are processed, so
+        # an eager parameter that renders the help page can expose the values that
+        # have not been processed yet. See ``_fill_unprocessed_params``.
+        previous_opts = ctx._parsed_opts
+        ctx._parsed_opts = opts
+
+        try:
+            for param in iter_params_for_processing(param_order, self.get_params(ctx)):
+                _, args = param.handle_parse_result(ctx, opts, args)
+        finally:
+            ctx._parsed_opts = previous_opts
 
         # We now have all parameters' values into `ctx.params`, but the data may contain
         # the `UNSET` sentinel.
