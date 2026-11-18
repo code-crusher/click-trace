@@ -26,6 +26,7 @@ from ._compat import isatty
 from ._compat import strip_ansi
 from ._compat import term_len
 from ._compat import WIN
+from ._compat import WSL
 from .exceptions import ClickException
 from .utils import echo
 
@@ -852,8 +853,15 @@ def open_url(url: str, wait: bool = False, locate: bool = False) -> int:
         else:
             url = _unquote_file(url)
         c = subprocess.Popen(["xdg-open", url])
-        if wait:
+
+        if wait or WSL:
+            # On WSL, xdg-open delegates to a helper and exits right after,
+            # but not immediately enough for the garbage collector to reap it:
+            # returning first leaves a zombie process behind (issue #2154).
+            # Waiting for it here is safe, because unlike a desktop xdg-open
+            # it does not block on the user closing the application.
             return c.wait()
+
         return 0
     except OSError:
         if url.startswith(("http://", "https://")) and not locate and not wait:

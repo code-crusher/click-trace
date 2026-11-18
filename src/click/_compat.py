@@ -4,6 +4,7 @@ import codecs
 import collections.abc as cabc
 import io
 import os
+import platform
 import re
 import sys
 import typing as t
@@ -12,6 +13,8 @@ from weakref import WeakKeyDictionary
 
 CYGWIN = sys.platform.startswith("cygwin")
 WIN = sys.platform.startswith("win")
+# WSL reports a kernel release like ``5.15.167.4-microsoft-standard-WSL2``.
+WSL = "microsoft" in platform.uname().release
 # One CSI escape sequence per the ECMA-48 grammar: parameter bytes (0x30-0x3F),
 # intermediate bytes (0x20-0x2F), then a final byte (0x40-0x7E). Broader than the
 # SGR codes Click emits, so foreign sequences (colon-delimited true-color, mouse

@@ -16,7 +16,9 @@ import pytest
 
 import click
 import click._termui_impl
+from click._compat import CYGWIN
 from click._compat import WIN
+from click._compat import WSL
 from click._termui_impl import Editor
 from click._utils import UNSET
 from click.exceptions import BadParameter
@@ -1319,6 +1321,144 @@ def test_tempfile_pager_closes_file_before_unlink(monkeypatch):
         "temp file still open when unlink ran; on Windows this raises "
         "PermissionError [WinError 32] and masks the real error"
     )
+
+
+@pytest.fixture()
+def fake_xdg_open(tmp_path, monkeypatch):
+    """Put an ``xdg-open`` stub first on ``PATH`` and record its argv.
+
+    The stub appends its command line to a file next to it, so tests can assert
+    what ``open_url`` actually invoked without a real desktop integration.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    stub = bin_dir / "xdg-open"
+    stub.write_text(
+        f"#!/bin/sh\nprintf '%s\\n' \"$@\" >> '{bin_dir / 'args.txt'}'\n",
+        encoding="utf-8",
+    )
+    stub.chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_dir) + os.pathsep + os.environ["PATH"])
+
+    log = bin_dir / "args.txt"
+    log.touch()
+
+    def read_args():
+        return log.read_text(encoding="utf-8").split()
+
+    return read_args
+
+
+def _zombie_children() -> list[str]:
+    """Return the pids of this process's children in Z state, by ``/proc``."""
+    zombies = []
+
+    for entry in pathlib.Path("/proc").iterdir():
+        try:
+            stat_fields = (entry / "stat").read_text().rsplit(") ", 1)[1].split()
+
+            if stat_fields[1] != os.getpid():
+                continue
+
+            if stat_fields[0] == "Z":
+                zombies.append(entry.name)
+        except OSError:
+            # The child exited between listing and reading: fine.
+            pass
+
+    return zombies
+
+
+def _wait_until(predicate, timeout: float = 5.0) -> bool:
+    deadline = time.monotonic() + timeout
+
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+
+        time.sleep(0.01)
+
+    return False
+
+
+@pytest.mark.skipif(WIN or sys.platform == "darwin" or CYGWIN, reason="no xdg-open")
+class TestLaunchXDGOpen:
+    """``open_url``'s ``xdg-open`` path must not leave unreaped children.
+
+    On WSL (issue #2154) ``xdg-open`` delegates to the Windows host and exits
+    soon after the call returns, while the caller keeps running: its exit is
+    then not reaped and shows up as a zombie for the rest of the session. The
+    WSL branch is exercised on every platform by faking ``WSL``.
+    """
+
+    def test_wsl_launch_waits_for_xdg_open(self, fake_xdg_open, monkeypatch):
+        """On WSL, launch waits for xdg-open to exit before returning."""
+        monkeypatch.setattr(click._termui_impl, "WSL", True)
+        assert click.launch("https://example.com") == 0
+        assert fake_xdg_open() == ["https://example.com"]
+        assert _zombie_children() == []
+
+    def test_wsl_launch_repeatedly_leaves_no_zombies(self, fake_xdg_open, monkeypatch):
+        """Every launch reaps its xdg-open: running in a long-lived process,
+        like an interactive Python shell, accumulates no zombies."""
+        monkeypatch.setattr(click._termui_impl, "WSL", True)
+
+        for _ in range(3):
+            assert click.launch("https://example.com") == 0
+
+        assert fake_xdg_open() == ["https://example.com"] * 3
+        assert _zombie_children() == []
+
+    def test_wsl_wait_true_still_waits(self, fake_xdg_open, monkeypatch):
+        """``wait=True`` behaves the same under the WSL override."""
+        monkeypatch.setattr(click._termui_impl, "WSL", True)
+        assert click.launch("https://example.com", wait=True) == 0
+        assert fake_xdg_open() == ["https://example.com"]
+        assert _zombie_children() == []
+
+    @pytest.mark.filterwarnings("default::ResourceWarning")
+    def test_no_wsl_wait_false_does_not_block(self, fake_xdg_open, monkeypatch):
+        """Off WSL, the default must stay non-blocking: a desktop ``xdg-open``
+        blocks until the application is closed, so waiting there would hang."""
+        monkeypatch.setattr(click._termui_impl, "WSL", False)
+        assert click.launch("https://example.com") == 0
+        # Returning before the child exits is the point of this path: with a
+        # desktop xdg-open the process only exits when the user closes the
+        # application, and waiting for it here would hang. The stub runs to
+        # completion on its own, so nothing is left blocking; the
+        # ResourceWarning from collecting the Popen while the stub runs is the
+        # expected shape of this path and is not escalated for this test.
+        assert _wait_until(lambda: fake_xdg_open() == ["https://example.com"])
+
+        # A not-yet-reaped exit stays in subprocess' internal list until the
+        # next spawn triggers its cleanup, which is how subprocess defers
+        # reaping outside WSL. Spawning one proves the stub was reaped rather
+        # than leaked.
+        subprocess.run(["true"])
+        assert _zombie_children() == []
+
+    def test_real_wsl_reports_zombie_without_fix(self, fake_xdg_open):
+        """Reproduce the issue itself where the kernel is a WSL one.
+
+        Running as-is on WSL, with the real ``WSL`` detection, a stub that
+        outlives the call leaves a zombie if the fix stops waiting: this is
+        the user-visible symptom of issue #2154, observed by ``ps``.
+        """
+        if not WSL:
+            pytest.skip("only meaningful on WSL")
+
+        # The stub lives a moment longer than the call, like a real xdg-open
+        # handing off to the Windows host.
+        stub_path = pathlib.Path(os.environ["PATH"].split(os.pathsep)[0]) / "xdg-open"
+        stub_path.write_text("#!/bin/sh\nsleep 0.2\n", encoding="utf-8")
+
+        assert click.launch("https://example.com") == 0
+        assert _zombie_children() == []
+
+    def test_missing_xdg_open_falls_back_to_webbrowser(self, monkeypatch):
+        monkeypatch.setenv("PATH", "")
+        monkeypatch.setattr("webbrowser.open", lambda url: 0)
+        assert click.launch("https://example.com") == 0
 
 
 def test_editor_unclosed_quote():
