@@ -48,7 +48,7 @@ And from the command line:
 
 For handling paths, the {class}`Path` type is better than a `str`. Some notable features are:
 
-- The `exists` argument will verify whether the path exists.
+- The `exists` argument controls whether the path is required to exist. `True` verifies the path exists, `False` verifies it does not exist (useful when creating a new file without overwriting an existing one), and `None` skips the check.
 - `readable`, `writable`, and `executable` can perform permission checks.
 - `file_okay` and `dir_okay` allow specifying whether files/directories are accepted.
 - Error messages are nicely formatted using {func}`format_filename` so any undecodable bytes will be printed nicely.

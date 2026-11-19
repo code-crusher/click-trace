@@ -188,3 +188,93 @@ def test_path_type(runner, cls, expect):
 
 def test_path_converted_type_parameter_at_runtime():
     assert t.get_args(click.Path[pathlib.Path]) == (pathlib.Path,)
+
+
+def test_path_exists_default_is_none():
+    """The default skips the existence check, so a path that does not exist
+    and a path that exists are both valid.
+    """
+    assert click.Path().exists is None
+    assert click.Path(exists=False).exists is False
+    assert click.Path(exists=True).exists is True
+
+
+def test_path_exists_required(tmp_path):
+    """``exists=True`` requires the path to exist."""
+    type = click.Path(exists=True)
+
+    with pytest.raises(click.BadParameter, match=r"file\.txt' does not exist"):
+        type.convert(os.fspath(tmp_path / "file.txt"), None, None)
+
+    existing = tmp_path / "file.txt"
+    existing.write_text("")
+    assert type.convert(os.fspath(existing), None, None) == os.fspath(existing)
+
+
+def test_path_not_exists(tmp_path):
+    """``exists=False`` requires the path not to exist, so that a program
+    can create it without overwriting anything. See issue #1428.
+    """
+    type = click.Path(exists=False)
+
+    missing = tmp_path / "file.txt"
+    assert type.convert(os.fspath(missing), None, None) == os.fspath(missing)
+
+    existing = tmp_path / "file.txt"
+    existing.write_text("")
+    with pytest.raises(click.BadParameter, match=r"file\.txt' already exists"):
+        type.convert(os.fspath(existing), None, None)
+
+    # The check applies to directories too.
+    existing_dir = tmp_path / "dir"
+    existing_dir.mkdir()
+    with pytest.raises(click.BadParameter, match=r"dir' already exists"):
+        type.convert(os.fspath(existing_dir), None, None)
+
+    missing_dir = tmp_path / "dir2"
+    assert type.convert(os.fspath(missing_dir), None, None) == os.fspath(missing_dir)
+
+
+def test_path_exists_false_cli(runner, tmp_path):
+    """End-to-end: ``exists=False`` rejects an existing path and accepts a
+    missing one.
+    """
+
+    @click.command()
+    @click.argument("dest", type=click.Path(exists=False))
+    def cli(dest):
+        click.echo(f"would create {dest}")
+
+    existing = tmp_path / "file.txt"
+    existing.write_text("")
+
+    result = runner.invoke(cli, [os.fspath(tmp_path / "new.txt")])
+    assert result.exit_code == 0
+    assert "would create" in result.output
+
+    result = runner.invoke(cli, [os.fspath(existing)])
+    assert result.exit_code == 2
+    assert "already exists" in result.output
+
+
+def test_path_exists_none_skips_remaining_checks(tmp_path):
+    """With the check skipped, a path that does not exist is accepted and
+    the file/dir/permission checks are silently skipped as before.
+    """
+    type = click.Path(dir_okay=False)
+    missing = tmp_path / "file.txt"
+    assert type.convert(os.fspath(missing), None, None) == os.fspath(missing)
+
+
+def test_path_exists_false_error_message_format(tmp_path):
+    """The error uses the type's name and :func:`format_filename`, matching
+    the other ``Path`` errors.
+    """
+    type = click.Path(file_okay=True, dir_okay=False, exists=False)
+    existing_dir = tmp_path / "dir"
+    existing_dir.mkdir()
+
+    with pytest.raises(click.BadParameter) as exc_info:
+        type.convert(os.fspath(existing_dir), None, None)
+
+    assert exc_info.value.message == f"File '{existing_dir}' already exists."

@@ -2,6 +2,12 @@
 
 Unreleased
 
+- {class}`Path` accepts three states for `exists`: `True` requires the path to
+  exist, `False` requires it not to exist, and `None` skips the check. `False`
+  is useful to check that a path is safe to create without overwriting anything.
+  The default changed from `False` to `None`; `exists=False` was a no-op, so
+  only code reading the attribute or `to_info_dict()` is affected.
+  {issue}`1428`
 - A parameter name that is not a valid Python identifier, or that is a Python
   keyword, is deprecated and raises `TypeError` in Click 9.0. {pr}`3866`
 - An {class}`Option` name written as a Python identifier is deprecated when it

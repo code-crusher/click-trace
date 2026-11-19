@@ -1048,7 +1048,7 @@ def _is_file_like(value: t.Any) -> te.TypeIs[t.IO[t.Any]]:
 
 
 class PathInfoDict(ParamTypeInfoDict):
-    exists: bool
+    exists: bool | None
     file_okay: bool
     dir_okay: bool
     writable: bool
@@ -1061,9 +1061,10 @@ class Path(ParamType[_PathT_co, str | os.PathLike[str]], t.Generic[_PathT_co]):
     returns the filename instead of an open file. Various checks can be
     enabled to validate the type of file and permissions.
 
-    :param exists: The file or directory needs to exist for the value to
-        be valid. If this is not set to ``True``, and the file does not
-        exist, then all further checks are silently skipped.
+    :param exists: Whether the path needs to exist to be valid.
+        ``True`` requires the path to exist, ``False`` requires it not to
+        exist, and ``None`` (the default) skips the check. If the path
+        does not exist, then all further checks are silently skipped.
     :param file_okay: Allow a file as a value.
     :param dir_okay: Allow a directory as a value.
     :param readable: if true, a readable check is performed.
@@ -1082,6 +1083,10 @@ class Path(ParamType[_PathT_co, str | os.PathLike[str]], t.Generic[_PathT_co]):
     .. versionchanged:: 8.5.1
         Reveal the actual type of the value as converted from raw input.
 
+    .. versionchanged:: 8.6.0
+        ``exists`` accepts ``False`` to require that the path does not
+        exist, and ``None`` to skip the check.
+
     .. versionchanged:: 8.1
         Added the ``executable`` parameter.
 
@@ -1094,7 +1099,7 @@ class Path(ParamType[_PathT_co, str | os.PathLike[str]], t.Generic[_PathT_co]):
 
     envvar_list_splitter: t.ClassVar[str] = os.path.pathsep
 
-    exists: bool
+    exists: bool | None
     file_okay: bool
     dir_okay: bool
     readable: bool
@@ -1106,7 +1111,7 @@ class Path(ParamType[_PathT_co, str | os.PathLike[str]], t.Generic[_PathT_co]):
 
     def __init__(
         self,
-        exists: bool = False,
+        exists: bool | None = None,
         file_okay: bool = True,
         dir_okay: bool = True,
         writable: bool = False,
@@ -1176,10 +1181,19 @@ class Path(ParamType[_PathT_co, str | os.PathLike[str]], t.Generic[_PathT_co]):
             try:
                 st = os.stat(rv)
             except OSError:
-                if not self.exists:
+                if self.exists is not True:
                     return self.coerce_path_result(rv)
                 self.fail(
                     _("{name} {filename!r} does not exist.").format(
+                        name=self.name.title(), filename=format_filename(value)
+                    ),
+                    param,
+                    ctx,
+                )
+
+            if self.exists is False:
+                self.fail(
+                    _("{name} {filename!r} already exists.").format(
                         name=self.name.title(), filename=format_filename(value)
                     ),
                     param,

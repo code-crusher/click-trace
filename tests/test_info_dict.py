@@ -165,7 +165,7 @@ HELLO_GROUP = (
             {
                 "param_type": "Path",
                 "name": "path",
-                "exists": False,
+                "exists": None,
                 "file_okay": True,
                 "dir_okay": True,
                 "writable": False,

@@ -26,6 +26,21 @@ param_type: click.Path[pathlib.Path] = click.Path(exists=True, path_type=pathlib
 assert_type(param_type.convert("a/b.txt", None, None), pathlib.Path)
 assert_type(param_type.coerce_path_result("a/b.txt"), pathlib.Path)
 
+# ``exists`` requires the path to exist, rejects an existing path, or skips
+# the check.
+assert_type(
+    click.Path(exists=True).convert("a/b.txt", None, None),
+    str | bytes | os.PathLike[str],
+)
+assert_type(
+    click.Path(exists=False).convert("a/b.txt", None, None),
+    str | bytes | os.PathLike[str],
+)
+assert_type(
+    click.Path(exists=None).convert("a/b.txt", None, None),
+    str | bytes | os.PathLike[str],
+)
+
 general: click.ParamType[str | bytes | os.PathLike[str]] = click.Path()
 specific: click.ParamType[pathlib.Path] = click.Path(path_type=pathlib.Path)
 
