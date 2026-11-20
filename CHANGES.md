@@ -25,6 +25,11 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- {class}`Option` accepts a new `require_value_arg` argument, which requires the
+  option's value to be a separate argument. For a short option this rejects the
+  attached form, so `-hmyhost` and `-hvmyhost` become errors instead of being read
+  as `host=myhost` and `host=vmyhost`. The default keeps the historical behavior.
+  {issue}`742`
 
 ## Version 8.5.1
 

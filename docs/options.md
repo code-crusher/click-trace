@@ -272,6 +272,39 @@ If the last option in the combination takes a value, the value can either follow
 Multi-character short option names are not supported. An argument like `-dbg` is interpreted as the combination of `-d`, `-b`, and `-g`, so Click reports `No such option: -d` if `-d` is not declared. For longer option names, use a long option with the `--` prefix (like `--debug`).
 ```
 
+The attached form is a historical POSIX convention, and it is what makes
+`-vn5` and `-v n 5` mean different things above. If the ambiguity is not
+wanted, set `require_value_arg=True` on the option. Its value must then be a
+separate argument, and Click rejects the attached form with an error, whether
+the option is spelled alone (`-n5`) or inside a combination (`-vn5`):
+
+```{eval-rst}
+.. click:example::
+
+    @click.command()
+    @click.option('-v', is_flag=True)
+    @click.option('-n', type=int, require_value_arg=True)
+    def cli(v, n):
+        click.echo(f"v={v} n={n}")
+
+.. click:run::
+
+    invoke(cli, args=['-vn', '5'])
+    invoke(cli, args=['-vn5'])
+```
+
+```{versionadded} 8.6.0
+The `require_value_arg` parameter of {class}`Option`.
+```
+
+```{note}
+`require_value_arg` is only meaningful for an option that takes a value; it is
+an error to combine it with `is_flag=True` or `count=True`. It also only
+affects short options, since a long option cannot be combined with others in
+the first place. A long option keeps accepting both the `--host myhost` and
+`--host=myhost` forms.
+```
+
 ## Counting
 
 To count the occurrence of an option, set `count=True`. If the option is not

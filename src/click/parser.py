@@ -407,6 +407,16 @@ class _OptionParser:
                 # Any characters left in arg?  Pretend they're the
                 # next arg, and stop consuming characters of arg.
                 if i < len(arg):
+                    if option.obj.require_value_arg:
+                        # The value must be a separate argument, not the
+                        # remainder of this short option group.
+                        raise BadOptionUsage(
+                            opt,
+                            _(
+                                "Option {name!r} requires its value as a"
+                                " separate argument."
+                            ).format(name=opt),
+                        )
                     state.rargs.insert(0, arg[i:])
                     stop = True
 

@@ -3082,9 +3082,21 @@ class Option(Parameter):
                                parameter will be pulled from an environment
                                variable in case a prefix is defined on the
                                context.
+    :param require_value_arg: if this is ``True``, a value must be given as a
+        separate argument. A short option cannot take its value attached, so
+        ``-h myhost`` is accepted while ``-hmyhost`` and ``-hvmyhost`` are
+        rejected. The default is the historical behavior, where a short
+        option's value may be attached, and the remainder of a short option
+        group is read as its value. Only affects short options; a long option
+        was never combinable with others, and it keeps accepting both the
+        ``--host myhost`` and ``--host=myhost`` forms.
     :param help: the help string.
     :param hidden: hide this option from help outputs.
     :param attrs: Other command arguments described in :class:`Parameter`.
+
+    .. versionchanged:: 8.6.0
+        Added the ``require_value_arg`` parameter, to reject a short option
+        whose value is attached instead of separated, like ``-hmyhost``.
 
     .. versionchanged:: 8.4.0
         Non-basic ``flag_value`` types (not ``str``, ``int``, ``float``, or
@@ -3131,6 +3143,7 @@ class Option(Parameter):
     show_default: bool | str | None
     show_choices: bool
     show_envvar: bool
+    require_value_arg: bool
 
     def __init__(
         self,
@@ -3145,6 +3158,7 @@ class Option(Parameter):
         multiple: bool = False,
         count: bool = False,
         allow_from_autoenv: bool = True,
+        require_value_arg: bool = False,
         type: types.ParamType[t.Any] | t.Any | None = None,
         help: str | None = None,
         hidden: bool = False,
@@ -3205,6 +3219,7 @@ class Option(Parameter):
         self.show_default = show_default
         self.show_choices = show_choices
         self.show_envvar = show_envvar
+        self.require_value_arg = require_value_arg
 
         # Phase 5: validate. Raises on illegal kwarg combinations.
         self._validate(prompt, deprecated)
@@ -3348,6 +3363,10 @@ class Option(Parameter):
                 raise TypeError("'count' is not valid with 'multiple'.")
             if self.is_flag:
                 raise TypeError("'count' is not valid with 'is_flag'.")
+        if self.require_value_arg and (self.count or self.is_flag):
+            raise TypeError(
+                "'require_value_arg' requires an option that takes a value."
+            )
 
     def to_info_dict(self) -> dict[str, t.Any]:
         """

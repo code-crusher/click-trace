@@ -214,6 +214,126 @@ def test_unknown_options(runner, unknown_flag):
 
 
 @pytest.mark.parametrize(
+    ("args", "expect"),
+    [
+        # The value as a separate argument is accepted, alone or in a group.
+        (["-h", "myhost"], "host='myhost' verbose=False"),
+        (["-vh", "myhost"], "host='myhost' verbose=True"),
+        (["-h", "myhost", "-v"], "host='myhost' verbose=True"),
+        # The attached form is rejected, alone or in a group.
+        (
+            ["-hmyhost"],
+            "Error: Option '-h' requires its value as a separate argument.",
+        ),
+        (
+            ["-vhmyhost"],
+            "Error: Option '-h' requires its value as a separate argument.",
+        ),
+        # The confusion from the issue: '-h' eats 'vmyhost' by default.
+        (
+            ["-hvmyhost"],
+            "Error: Option '-h' requires its value as a separate argument.",
+        ),
+    ],
+)
+def test_require_value_arg(runner, args, expect):
+    """``require_value_arg=True`` rejects a short option's attached value,
+    requiring a separate argument instead. See issue #742.
+    """
+
+    @click.command()
+    @click.option("-h", "--host", require_value_arg=True)
+    @click.option("-v", "--verbose", is_flag=True)
+    def cli(host, verbose):
+        click.echo(f"host={host!r} verbose={verbose}")
+
+    result = runner.invoke(cli, args)
+    assert expect in result.output
+
+
+def test_require_value_arg_long_options(runner):
+    """A long option's value is unaffected by ``require_value_arg``: it is
+    still given as the next argument or attached with ``=``.
+    """
+
+    @click.command()
+    @click.option("--host", require_value_arg=True)
+    def cli(host):
+        click.echo(f"host={host!r}")
+
+    assert runner.invoke(cli, ["--host", "x"]).output == "host='x'\n"
+    assert runner.invoke(cli, ["--host=x"]).output == "host='x'\n"
+
+
+def test_require_value_arg_error_is_usage(runner):
+    """The rejection is a usage error: exit code 2, with the offending
+    option named in the message.
+    """
+
+    @click.command()
+    @click.option("-h", "--host", require_value_arg=True)
+    def cli(host):
+        click.echo(f"host={host!r}")
+
+    result = runner.invoke(cli, ["-hmyhost"])
+    assert result.exit_code == 2
+    assert "Error: Option '-h' requires its value as a separate argument." in (
+        result.output
+    )
+
+
+def test_require_value_arg_resilient_parsing():
+    """Resilient parsing, used by shell completion, skips the value instead
+    of raising.
+    """
+    cli = click.Command(
+        "cli", params=[click.Option(["-h", "--host"], require_value_arg=True)]
+    )
+    with click.Context(cli, resilient_parsing=True) as ctx:
+        cli.parse_args(ctx, ["-hmyhost"])
+
+    assert ctx.params["host"] is None
+
+
+def test_require_value_arg_only_value_options(runner):
+    """``require_value_arg`` is rejected for options that do not take a
+    value, where it could never apply.
+    """
+    with pytest.raises(TypeError, match="takes a value"):
+        click.Option(["-v"], is_flag=True, require_value_arg=True)
+
+    with pytest.raises(TypeError, match="takes a value"):
+        click.Option(["-v"], count=True, require_value_arg=True)
+
+
+@pytest.mark.parametrize(
+    ("args", "expect"),
+    [
+        (["-h", "myhost"], "host='myhost' verbose=False"),
+        (["-hmyhost"], "host='myhost' verbose=False"),
+        (["-vh", "myhost"], "host='myhost' verbose=True"),
+        (["-vhmyhost"], "host='myhost' verbose=True"),
+        # The default attached form reads the rest of the group as the value.
+        (["-hvmyhost"], "host='vmyhost' verbose=False"),
+    ],
+)
+def test_attached_value_default(runner, args, expect):
+    """Without ``require_value_arg``, the historical behavior is unchanged:
+    a short option's value may be attached to it. See issue #742.
+    """
+
+    @click.command()
+    @click.option("-h", "--host")
+    @click.option("-v", "--verbose", is_flag=True)
+    def cli(host, verbose):
+        click.echo(f"host={host!r} verbose={verbose}")
+
+    result = runner.invoke(cli, args)
+    assert result.exit_code == 0
+    assert expect in result.output
+
+
+@pytest.mark.parametrize(
     ("value", "expect"),
     [
         ("--cat", "Did you mean '--count'?"),
