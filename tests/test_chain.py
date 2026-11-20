@@ -125,6 +125,101 @@ def test_chaining_with_arguments(runner):
 
 
 @pytest.mark.parametrize(
+    "args",
+    [
+        ["command", "--option", "x", "a"],
+        ["command", "a", "--option", "x"],
+    ],
+)
+def test_chaining_with_argument_and_option(runner, args):
+    """An option may follow an argument, as it may for a command that is
+    not in a chain.
+    """
+
+    @click.group(chain=True)
+    def cli():
+        pass
+
+    @cli.command()
+    @click.argument("argument")
+    @click.option("--option")
+    def command(argument, option):
+        click.echo(f"command called {argument} {option}")
+
+    result = runner.invoke(cli, args)
+    assert not result.exception
+    assert result.output.splitlines() == ["command called a x"]
+
+
+def test_chaining_option_after_argument_then_command(runner):
+    """An option after an argument is parsed by the command it belongs to,
+    and the next command in the chain still runs.
+    """
+
+    @click.group(chain=True)
+    def cli():
+        pass
+
+    @cli.command()
+    @click.argument("argument")
+    @click.option("--option")
+    def first(argument, option):
+        click.echo(f"first called {argument} {option}")
+
+    @cli.command()
+    @click.option("--option")
+    def second(option):
+        click.echo(f"second called {option}")
+
+    result = runner.invoke(cli, ["first", "a", "--option", "1", "second", "--option=2"])
+    assert not result.exception
+    assert result.output.splitlines() == ["first called a 1", "second called 2"]
+
+
+def test_chaining_option_after_nargs(runner):
+    """A command with an argument that takes several values still parses
+    its own options after those values.
+    """
+
+    @click.group(chain=True)
+    def cli():
+        pass
+
+    @cli.command()
+    @click.argument("values", nargs=2)
+    @click.option("--option")
+    def command(values, option):
+        click.echo(f"command called {values[0]} {values[1]} {option}")
+
+    result = runner.invoke(cli, ["command", "a", "b", "--option", "x"])
+    assert not result.exception
+    assert result.output.splitlines() == ["command called a b x"]
+
+
+def test_chaining_variadic_argument_takes_rest(runner):
+    """An argument that takes any number of values keeps taking them to the
+    end of the line, so a command name after it is a value.
+    """
+
+    @click.group(chain=True)
+    def cli():
+        pass
+
+    @cli.command()
+    @click.argument("values", nargs=-1)
+    def command(values):
+        click.echo(f"command called {' '.join(values)}")
+
+    @cli.command()
+    def other():
+        click.echo("other called")
+
+    result = runner.invoke(cli, ["command", "a", "--option", "other"])
+    assert not result.exception
+    assert result.output.splitlines() == ["command called a --option other"]
+
+
+@pytest.mark.parametrize(
     ("args", "input", "expect"),
     [
         (["-f", "-"], "foo\nbar", ["foo", "bar"]),

@@ -25,6 +25,9 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- A command in a chain parses its own options after its arguments, as a
+  command that is not in a chain does, instead of reporting that the option
+  is not a command. {issue}`1269`
 
 ## Version 8.5.1
 

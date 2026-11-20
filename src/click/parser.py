@@ -252,10 +252,23 @@ class _OptionParser:
         #: second mode where it will ignore it and continue processing
         #: after shifting all the unknown options into the resulting args.
         self.ignore_unknown_options: bool = False
+        #: This tells the parser to keep parsing options after positional
+        #: values, as long as the command's arguments can still take more
+        #: values. Parsing stops at the first positional value they can't
+        #: take. Click uses this for commands in a chain, where that value
+        #: names the next command.
+        self.allow_interspersed_args_until_full: bool = False
 
         if ctx is not None:
             self.allow_interspersed_args = ctx.allow_interspersed_args
             self.ignore_unknown_options = ctx.ignore_unknown_options
+            # A command in a chain is followed by more commands, so parsing
+            # has to stop before their names. Its own options may still come
+            # after its arguments, as they do for a command that is not in a
+            # chain, so stop only once its arguments are full.
+            self.allow_interspersed_args_until_full = (
+                ctx.parent is not None and getattr(ctx.parent.command, "chain", False)
+            )
 
         self._short_opt: dict[str, _Option] = {}
         self._long_opt: dict[str, _Option] = {}
@@ -324,7 +337,24 @@ class _OptionParser:
         state.largs = args
         state.rargs = []
 
+    def _args_full(self, value_count: int) -> bool:
+        """Check whether ``value_count`` positional values fill every
+        argument of the command, leaving no room for more.
+        """
+        nargs_spec = [x.nargs for x in self._args]
+
+        if any(nargs < 0 for nargs in nargs_spec):
+            # An argument that takes any number of values keeps taking them
+            # to the end of the line, as it always has in a chain.
+            return True
+
+        return value_count >= sum(nargs_spec)
+
     def _process_args_for_options(self, state: _ParsingState) -> None:
+        # Number of positional values seen so far. This can't be derived
+        # from ``state.largs``, which also holds options that are ignored.
+        value_count = 0
+
         while state.rargs:
             arg = state.rargs.pop(0)
             arglen = len(arg)
@@ -336,6 +366,15 @@ class _OptionParser:
                 self._process_opts(arg, state)
             elif self.allow_interspersed_args:
                 state.largs.append(arg)
+                value_count += 1
+            elif self.allow_interspersed_args_until_full and not self._args_full(
+                value_count
+            ):
+                # The command's arguments can still take this value, so
+                # options that follow it belong to this command rather than
+                # to the next command in a chain.
+                state.largs.append(arg)
+                value_count += 1
             else:
                 state.rargs.insert(0, arg)
                 return

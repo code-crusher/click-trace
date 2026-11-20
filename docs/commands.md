@@ -167,8 +167,8 @@ When using chaining, there are a few restrictions:
 - Only the last command may use `nargs=-1` on an argument, otherwise the
   parser will not be able to find further commands.
 - It is not possible to nest groups below a chain group.
-- On the command line, options must be specified before arguments for each
-  command in the chain.
+- An argument that takes any number of values takes every remaining value
+  on the line, including a following command name.
 - The {attr}`Context.invoked_subcommand` attribute will be `'*'` because the
   parser doesn't know the full list of commands that will run yet.
 
