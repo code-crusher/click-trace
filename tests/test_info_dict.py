@@ -96,7 +96,7 @@ HELLO_GROUP = (
     ("obj", "expect"),
     [
         pytest.param(
-            click.types.FuncParamType(range),
+            click.types._FuncParamType(range),
             {"param_type": "Func", "name": "range", "func": range},
             id="Func ParamType",
         ),
@@ -274,6 +274,15 @@ def test_paramtype_no_name():
         pass
 
     assert TestType().to_info_dict()["name"] == "TestType"
+
+
+def test_private_paramtype_reports_public_name():
+    """A leading underscore marks a class private, it is not part of its name."""
+
+    class _TestParamType(click.ParamType):
+        pass
+
+    assert _TestParamType().to_info_dict()["param_type"] == "Test"
 
 
 PARAM_KINDS = [

@@ -24,7 +24,7 @@ import click
 )
 def test_convert_type_from_container_default(default):
     """Container defaults are not natively supported and fall back to STRING."""
-    assert click.types.convert_type(None, default) is click.STRING
+    assert click.types._convert_type(None, default) is click.STRING
 
 
 @pytest.mark.parametrize(
@@ -36,10 +36,10 @@ def test_convert_type_from_container_default(default):
 )
 def test_explicit_container_type_splits_string(container_type, value, expected):
     """An explicit ``set`` or ``frozenset`` type wraps the builtin in a
-    ``FuncParamType``, which splits CLI strings character-wise.
+    ``_FuncParamType``, which splits CLI strings character-wise.
     """
-    param_type = click.types.convert_type(container_type)
-    assert isinstance(param_type, click.types.FuncParamType)
+    param_type = click.types._convert_type(container_type)
+    assert isinstance(param_type, click.types._FuncParamType)
     assert param_type.convert(value, None, None) == expected
 
 
@@ -75,7 +75,7 @@ def test_type_inferred_from_default(default, expected):
 
     Keep the two in step: a change here is a change to documented behavior.
     """
-    assert click.types.convert_type(None, default) is expected
+    assert click.types._convert_type(None, default) is expected
 
 
 def test_type_inferred_from_nested_sequence_default():
@@ -83,14 +83,14 @@ def test_type_inferred_from_nested_sequence_default():
 
     This is the one table row that is not a singleton ``ParamType``.
     """
-    param_type = click.types.convert_type(None, [(1, "git")])
+    param_type = click.types._convert_type(None, [(1, "git")])
     assert isinstance(param_type, click.Tuple)
     assert param_type.types == [click.INT, click.STRING]
 
 
 def test_explicit_dict_type_rejects_string():
     """An explicit ``dict`` type cannot convert a plain CLI string at all."""
-    param_type = click.types.convert_type(dict)
-    assert isinstance(param_type, click.types.FuncParamType)
+    param_type = click.types._convert_type(dict)
+    assert isinstance(param_type, click.types._FuncParamType)
     with pytest.raises(click.BadParameter):
         param_type.convert("abc", None, None)

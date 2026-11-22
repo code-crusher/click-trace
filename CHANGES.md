@@ -19,6 +19,10 @@ Unreleased
   for options, so its value changes from `my_option` to `--my-option`. Click no
   longer reads it, and a subclass that overrides it gets a warning when the class
   is defined. {pr}`3877`
+- `click.types.FuncParamType` and `click.types.convert_type` were never
+  intentionally public and are now private (`_`-prefixed). The old names remain
+  available with a `DeprecationWarning` until Click 9.0. Neither was ever
+  exported from the top-level `click` namespace. {issue}`3847`
 - With `echo_stdin=True`, {class}`CliRunner` echoes the `\x04` and `\x1a`
   `<stdin>` bytes to `<stdout>` as `^D` and `^Z`, and no longer passes them to
   the command. {pr}`3878`
