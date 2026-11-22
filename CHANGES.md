@@ -25,6 +25,9 @@ Unreleased
 - {meth}`CliRunner.invoke` accepts a new `context_settings` argument, to allow
   passing settings to the {class}`Context` of the command which cannot be given as extra
   keyword arguments like `color`. {issue}`2110` {pr}`3896`
+- An {class}`Option` with `multiple=True` appends `...` to its metavar in the
+  help page, so `--foo TEXT...` marks that the option may be repeated.
+  {issue}`3652`
 
 ## Version 8.5.1
 

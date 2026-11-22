@@ -215,6 +215,9 @@ arguments (which is called variadic). The arguments are passed to the decorated
 function as a tuple. If set, `default` must be a list or tuple. Setting a string
 as `default` will be interpreted as a list of characters.
 
+The help page marks such an option with a trailing `...` on its metavar, so
+`--message TEXT...` shows that the option may be given more than once.
+
 ```{eval-rst}
 .. click:example::
 

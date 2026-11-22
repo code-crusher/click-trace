@@ -2616,7 +2616,9 @@ class Parameter(ABC):
         if metavar is None:
             metavar = self.type.name.upper()
 
-        if self.nargs != 1:
+        # An option that can be repeated reads like one that takes several
+        # values at once: ``--foo TEXT...``.
+        if self.nargs != 1 or self.multiple:
             metavar += "..."
 
         return metavar
@@ -3085,6 +3087,10 @@ class Option(Parameter):
     :param help: the help string.
     :param hidden: hide this option from help outputs.
     :param attrs: Other command arguments described in :class:`Parameter`.
+
+    .. versionchanged:: 8.6.0
+        An option with ``multiple=True`` appends ``...`` to its metavar in the
+        help page, so ``--foo TEXT...`` shows that the option may be repeated.
 
     .. versionchanged:: 8.4.0
         Non-basic ``flag_value`` types (not ``str``, ``int``, ``float``, or

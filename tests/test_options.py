@@ -80,6 +80,9 @@ def test_deprecated_empty_help_no_leading_space(help_text, deprecated, expected)
     [
         (["-v", "--verbose"], {"is_flag": True}, "-v, --verbose"),
         (["--config"], {}, "--config TEXT"),
+        (["--config"], {"multiple": True}, "--config TEXT..."),
+        (["--config"], {"nargs": 2}, "--config TEXT..."),
+        (["--config"], {"multiple": True, "metavar": "FILE"}, "--config FILE"),
         (["--color/--no-color"], {}, "--color / --no-color"),
         (["/debug;/no-debug"], {}, "/debug; /no-debug"),
     ],
@@ -242,6 +245,21 @@ def test_multiple_required(runner):
     result = runner.invoke(cli, [])
     assert result.exception
     assert "Error: Missing option '-m' / '--message'." in result.output
+
+
+def test_multiple_option_help_shows_ellipsis(runner):
+    """A repeatable option is marked with ``...`` in the help page, so it is
+    distinguishable from an option that takes a single value.
+    """
+
+    @click.command()
+    @click.option("--foo", multiple=True, help="A list of foo strings.")
+    def cli(foo):
+        pass
+
+    result = runner.invoke(cli, ["--help"])
+    assert result.exit_code == 0, result.output
+    assert "  --foo TEXT...  A list of foo strings." in result.output
 
 
 @pytest.mark.parametrize(
